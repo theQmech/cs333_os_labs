@@ -83,15 +83,14 @@
 	16724 iamutkars  20   0 11740   912   784 R 26.4  0.0  2:26.08 grep hello  
 	```
 		
-	![File descriptor of `cpu-print`](./cpu-print.png)
+<!-- 	![File descriptor of `cpu-print`](./cpu-print.png)
 
-	![File descriptor of `grep`](./grep.png)
+	![File descriptor of `grep`](./grep.png) -->
 
-	The 0(input) file decriptor of grep is the 1(output) file desciptor
-	of `./cpu-print` hence in bash pipes point the output file desciptor 
-	of left_process to the input file desciptor of the right_process. 
-	Hence data written to the write end of the pipe is buffered by the kernel 
-	until it is read from the read end of the pipe. 
-	Pipes create a temporary file buffer in between the read and the write end 
-	which can be seen in the file descriptors of the two processes. 
+	The 0(input) file decriptor of grep is the 1(output) file desciptor of `./cpu-print`
+	hence in bash pipes point the output file desciptor  of left_process to the input file desciptor of 
+	the right_process. Pipes creates a temporary file buffer in between the left and the right end of pipe 
+	which can be seen in the file descriptors of the two processes.Data written to the right end of the pipe 
+	is buffered by the kernel until it is read from the read end of the pipe. 
+ 
 
