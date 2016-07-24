@@ -4,35 +4,36 @@
 	
 	6328631 context switches. 14034 processes forked since startup
 
-2. 	**cpu** Memory. The CPU usage was always above 98%. This is expected since the code is intensive on arithmetic operation.
+2. 	**cpu** CPU. The CPU usage was always above 98%. This is expected since the code is intensive on arithmetic operation and diesnt nothing else.
 
-	**cpu-print** Disk operation. Output of command pidstat reveals that the process makes lot of write operations on disk(we wrote to file /tmp/myfile). This is exactly what is expected because the bottleneck seems to be the printf() or the write() system calls which are expensive.
+	**cpu-print** Memory. In this case CPU usage is quite low. That can't be the bottleneck. Disk operations are nowhere involved. The expensive task seems to be the write operations which are handled by memory(when ouput is on default stdout). On using `./cpu-print >/tmp/myfile` we found that this was no longer the case since the output was then written on the disk. Disk Operations were the bottlenech in this case.
 	
-	**disk** Disk. Output of **pidstat -dl -p <pid>** reveals that the process is using lots of read operations. The process reads files in a random order and hence the buffer isn't really useful here  
-	**disk1** CPU. The CPU usage is always high ie. almost 100%. The process reads the same file over and over again and is hence stored in the buffer. Thus disk operations aren't a bottleneck here.
+	**disk** Disk. Output of ``pidstat -dl -p <pid>`` reveals that the process is using lots of read operations. The process reads files in a random order and hence the buffer isn't really useful here  
+	**disk1** CPU. The CPU usage is always high ie. almost 100%. The process reads the same file over and over again and is hence stored in the buffer. Thus disk operations aren't a bottleneck anymore.
 
 3.	Following are the outputs:
 	```
 	cat /proc/pid/
-	`./cpu` - 20465 28
-	`./cpu-print` - 238 1380
+	./cpu - 20465 28
+	./cpu-print - 238 1380
 	```
-
 	`cpu` spends more time in user mode and `cpu-print` spends more time in kernel mode.
 
 	`cpu` program has to make no system calls. All it does is computation which doesn't require program to go into kernel mode, whereas in cpu-print the program makes two system callsgettimeofday() and printf() very often for which it needs PC to go in kernel mode hence it spends more time in kernel mode.
-Computation for `cpu-print` is very less hence it spends less time user mode as compared to system mode.
 
-4.	`./cpu` - voluntary 1 nonvn 3000
+	Computation for `cpu-print` is very less hence it spends less time user mode as compared to system mode.
 
-   	`./cpu-print` - vln 65K nonvn 28Mil
-
-   	Reason - `cpu` program has no system calls to be made hence no voluntary.
+4.	Output lines:
+	```
+	./cpu - voluntary 1 nonvn 3000
+   	./cpu-print - vln 65K nonvn 28Mil
+	```
+   	`cpu` program has no system calls to be made hence no voluntary.
    	`cpu-print` has no system calls hence more vln calls 
 
 5.	Output of `pstree`
 	```
-	pstree -ps $$
+	$ pstree -ps $$
 	init(1)---lightdm(1388)---lightdm(10435)---init(10460)
 	---tmux(11653)---bash(12329)---pstree(14990)
 	```
@@ -44,8 +45,12 @@ Computation for `cpu-print` is very less hence it spends less time user mode as 
 	ls: /bin/ls /usr/share/man/man1/ls.1.gz
 	history: /usr/share/man/man3/history.3readline.gz
 	ps: /bin/ps /usr/share/man/man1/ps.1.gz
-	```	
-	Thus the last three are exec'ed and the first is implemented by bash.
+	```
+	It is clear that `cd` and `history` have no executable. `history` only has a man page.	
+	Thus,
+
+	`cd` and `history` - implemented by bash
+	`ls` and `ps` - exec'ed by bash
 
 7.	File desciptors are pointing to
 	```	
