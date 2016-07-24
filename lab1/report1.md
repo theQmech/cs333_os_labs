@@ -1,3 +1,8 @@
+#CS 333 Operating Systems Lab#
+##140050005 Rupanshu Ganvir##
+##140050009 Utkarsh Gautam##
+
+
 1.	The CPU has 4 cores. Total memory: 8146892 kB.
  
 	Free memory: 1193748 kB. 14.65% memory free. 
@@ -13,22 +18,34 @@
 
 3.	Following are the outputs:
 	```
-	cat /proc/pid/
-	`./cpu` - 20465 28
-	`./cpu-print` - 238 1380
+	cat /proc/pid/stat
+	-----------------------------------
+	Executable  system time user time
+	----------  ----------- ---------
+	`./cpu`      20465           28
+	`./cpu-print`  238         1380
+
+	-----------------------------------
 	```
 
 	`cpu` spends more time in user mode and `cpu-print` spends more time in kernel mode.
 
-	`cpu` program has to make no system calls. All it does is computation which doesn't require program to go into kernel mode, whereas in cpu-print the program makes two system callsgettimeofday() and printf() very often for which it needs PC to go in kernel mode hence it spends more time in kernel mode.
-Computation for `cpu-print` is very less hence it spends less time user mode as compared to system mode.
+	`cpu` program has to make no system calls. All it does is computation which doesn't require program to go into kernel mode, whereas in cpu-print the program makes two system calls `gettimeofday()` and `printf()` very often for which it needs PC to go in kernel mode hence it spends more time in kernel mode.Computation for `cpu-print` is very less hence it spends less time user mode as compared to system mode.
 
-4.	`./cpu` - voluntary 1 nonvn 3000
+4.	`./cpu` - volun 1 nonvln 14021  - Mostly non voluntary context switches.
 
-   	`./cpu-print` - vln 65K nonvn 28Mil
+   	`./cpu-print` - vln 65K nonvln 28Mil - Mostly non voluntary context switches
 
-   	Reason - `cpu` program has no system calls to be made hence no voluntary.
-   	`cpu-print` has no system calls hence more vln calls 
+
+   	Reason -
+   	`cpu` program has no system calls to be made only computation hence only one initial context switch to execute it.
+   	Since memory is the bottleneck for this process, nonvoluntary context switches are due to excess memory utilization 
+   	for a longer period of time("the forever while loop").
+
+
+   	`cpu-print` has blocking system calls `gettimeofday()` which causes most of the voluntary context switches. Since disk(i/o) is the
+   	bottleneck of this excess i/o system calls which keep CPU to wait are the reason for non voluntary context switches.
+   	Rather than  forever waiting for i/o system calls(the forever while loop ), the program schduler switches context to other processes.
 
 5.	Output of `pstree`
 	```
