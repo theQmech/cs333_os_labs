@@ -1,3 +1,8 @@
+#CS 333 Operating Systems Lab#
+## 140050005 Rupanshu Ganvir
+## 140050009 Utkarsh Gautam
+
+
 1.	The CPU has 4 cores. Total memory: 8146892 kB.
  
 	Free memory: 1193748 kB. 14.65% memory free. 
@@ -13,23 +18,30 @@
 
 3.	Following are the outputs:
 	```
-	cat /proc/pid/
-	./cpu - 20465 28
-	./cpu-print - 238 1380
+	cat /proc/pid/stat
+	-----------------------------------
+	Executable    system time user time
+	----------    ----------- ---------
+	`./cpu`             20465        28
+	`./cpu-print`         238      1380
+	-----------------------------------
 	```
 	`cpu` spends more time in user mode and `cpu-print` spends more time in kernel mode.
 
-	`cpu` program has to make no system calls. All it does is computation which doesn't require program to go into kernel mode, whereas in cpu-print the program makes two system callsgettimeofday() and printf() very often for which it needs PC to go in kernel mode hence it spends more time in kernel mode.
+	`cpu` program has to make no system calls. All it does is computation which doesn't require program to go into kernel mode, whereas in cpu-print the program makes two system calls `gettimeofday()` and `printf()` very often for which it needs PC to go in kernel mode hence it spends more time in kernel mode.Computation for `cpu-print` is very less hence it spends less time user mode as compared to system mode.
 
-	Computation for `cpu-print` is very less hence it spends less time user mode as compared to system mode.
+4.	`./cpu` - volun 1 nonvln 14021  - Mostly non voluntary context switches.
 
-4.	Output lines:
-	```
-	./cpu - voluntary 1 nonvn 3000
-   	./cpu-print - vln 65K nonvn 28Mil
-	```
-   	`cpu` program has no system calls to be made hence no voluntary.
-   	`cpu-print` has no system calls hence more vln calls 
+   	`./cpu-print` - vln 65K nonvln 28Mil - Mostly non voluntary context switches
+
+   	Reason -
+   	`cpu` program has no system calls to be made only computation hence only one initial context switch to execute it.
+   	Since memory is the bottleneck for this process, nonvoluntary context switches are due to excess memory utilization 
+   	for a longer period of time("the forever while loop").
+
+   	`cpu-print` has blocking system calls `gettimeofday()` which causes most of the voluntary context switches. Since disk(i/o) is the
+   	bottleneck of this excess i/o system calls which keep CPU to wait are the reason for non voluntary context switches.
+   	Rather than  forever waiting for i/o system calls(the forever while loop ), the program schduler switches context to other processes.
 
 5.	Output of `pstree`
 	```
@@ -50,6 +62,7 @@
 	Thus,
 
 	`cd` and `history` - implemented by bash
+
 	`ls` and `ps` - exec'ed by bash
 
 7.	File desciptors are pointing to
@@ -71,15 +84,14 @@
 	16724 iamutkars  20   0 11740   912   784 R 26.4  0.0  2:26.08 grep hello  
 	```
 		
-	![File descriptor of `cpu-print`](./cpu-print.png)
+ 	![File descriptor of `cpu-print`](./cpu-print.png)
 
-	![File descriptor of `grep`](./grep.png)
+	![File descriptor of `grep`](./grep.png) 
 
-	The 0(input) file decriptor of grep is the 1(output) file desciptor
-	of `./cpu-print` hence in bash pipes point the output file desciptor 
-	of left_process to the input file desciptor of the right_process. 
-	Hence data written to the write end of the pipe is buffered by the kernel 
-	until it is read from the read end of the pipe. 
-	Pipes create a temporary file buffer in between the read and the write end 
-	which can be seen in the file descriptors of the two processes. 
+	The 0(input) file decriptor of grep is the 1(output) file desciptor of `./cpu-print`
+	hence in bash pipes point the output file desciptor  of left_process to the input file desciptor of 
+	the right_process. Pipes creates a temporary file buffer in between the left and the right end of pipe 
+	which can be seen in the file descriptors of the two processes. Data written to the right end of the pipe 
+	is buffered by the kernel until it is read from the read end of the pipe. 
+ 
 
