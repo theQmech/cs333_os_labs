@@ -1,12 +1,12 @@
 all:
-	gcc Client/simple-client-socket-program.c -o client
-	gcc Server/simple-server-socket-program.c -o server
+	gcc Client/multiclient.c -o client
+	gcc Server/server-mp.c -o server
 
 client:
-	gcc Client/simple-client-socket-program.c -o client
+	gcc Client/multiclient -o client
 
 server:
-	gcc Server/simple-server-socket-program.c -o server
+	gcc Server/server-mp.c -o server
 
 clean:
 	rm -f client server
