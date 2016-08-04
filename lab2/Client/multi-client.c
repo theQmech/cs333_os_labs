@@ -4,12 +4,14 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <sys/stat.h>
+#include <sys/time.h>  
 #include <fcntl.h>
 #include <pthread.h>
 
 
-# define NUM_THREADS 16
-
+# define NUM_THREADS 16  //number of threads
+# define RUN_TIME 10.0  // runtime for each thread in seconds
+# define SLEEP_TIME 1
 
 struct threaddata {
 
@@ -43,66 +45,84 @@ void * clientproc(void * t) {
     /* create socket, get sockfd handle */
     
     portno = atoi(td->port);
-    //printf("hostname %s  port %d .\n", td->hostname, portno);
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        error("ERROR opening socket");
+
+    struct timeval t1, t2;
+    double elapsedTime = 0.0;
+
+    while(elapsedTime < RUN_TIME){
+
+        gettimeofday(&t1, NULL);
+            //printf("hostname %s  port %d .\n", td->hostname, portno);
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+         if (sockfd < 0)
+            error("ERROR opening socket");
 
     /* fill in server address in sockaddr_in datastructure */
 
-    server = gethostbyname( td->hostname);
-    if (server == NULL) {
-        fprintf(stderr, "ERROR, no such host\n");
-        error("ERROR, no such host\n");
-        exit(0);
+        server = gethostbyname( td->hostname);
+         if (server == NULL) {
+             fprintf(stderr, "ERROR, no such host\n");
+             error("ERROR, no such host\n");
+             exit(0);
+         }
+         bzero((char *) &serv_addr, sizeof(serv_addr));
+
+         serv_addr.sin_family = AF_INET;
+          bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+         serv_addr.sin_port = htons(portno);
+
+        // everything ahead has to be done by each thread
+        /* connect to server */
+        if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+            error("ERROR connecting");
+        // specify file number
+        int filenumber = 0;  // decide yourself
+        char *dest = (char *)malloc(sizeof(char) * 4);
+        sprintf(dest, "%d", filenumber);
+        char filename[] = "get files/file";
+        strcat(filename, dest);
+        strcat(filename, ".txt\0");
+        printf("%d - %s\n", td->threadid, filename);
+        /* send user message to server */
+
+        strcpy(buffer, filename); // so that none of further code changes
+
+        // make a fire request to server
+        n = write(sockfd, buffer, strlen(buffer) );
+        if (n < 0)
+            error("ERROR writing to socket");
+        bzero(buffer, 256);
+
+        // start reading from server
+        n = read(sockfd, buffer, 255 );
+
+        while (1) { // read from file in chunks of 255;
+            if (n == 0) {
+                break;
+            }
+            else if (n == -1) {
+                error("Error reading from socket");
+            }
+            else {
+                bzero(buffer, 256);
+                n = read(sockfd, buffer, 255 );
+            }
+
+ 
+
+         }
+        close(sockfd);
+
+        sleep(SLEEP_TIME);
+        gettimeofday(&t2, NULL);
+        elapsedTime += (t2.tv_sec - t1.tv_sec);   
+        //printf("Elapsed Time %f\n", elapsedTime);
+
     }
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-
-    serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-    serv_addr.sin_port = htons(portno);
-
-
-
-    // everything ahead has to be done by each thread
-    /* connect to server */
-    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-        error("ERROR connecting");
-    // specify file number
-    int filenumber = 0;  // decide yourself
-    char *dest = (char *)malloc(sizeof(char) * 4);
-    sprintf(dest, "%d", filenumber);
-    char filename[] = "get files/file";
-    strcat(filename, dest);
-    strcat(filename, ".txt\0");
-    printf("%d - %s\n", td->threadid, filename);
-    /* send user message to server */
-
-    strcpy(buffer, filename); // so that none of further code changes
-
-    // make a fire request to server
-    n = write(sockfd, buffer, strlen(buffer) );
-    if (n < 0)
-        error("ERROR writing to socket");
-    bzero(buffer, 256);
-
-    // start reading from server
-    n = read(sockfd, buffer, 255 );
-
-    while (1) { // read from file in chunks of 255;
-        if (n == 0) {
-            break;
-        }
-        else if (n == -1) {
-            error("Error reading from socket");
-        }
-        else {
-            bzero(buffer, 256);
-            n = read(sockfd, buffer, 255 );
-        }
-    }
-    close(sockfd);
     printf("Thread %d  quitting\n", td->threadid);
+
+
+
     pthread_exit(NULL);
 
 }
@@ -147,9 +167,10 @@ int main(int argc, char *argv[])
 
     }
 
-    pthread_exit(NULL);
-
-
+    i = 0;
+    for(i = 0; i < NUM_THREADS; i++){
+        pthread_join(threads[i], NULL);
+    }
 
     return 0;
 }
