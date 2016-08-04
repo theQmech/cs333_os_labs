@@ -11,23 +11,28 @@
 # define NUM_THREADS 16
 
 
+struct threaddata {
+
+    int threadid;
+    char * hostname;
+    char * port;
+
+};
+
+
 void error(char *msg)
 {
     perror(msg);
     exit(0);
 }
 
-struct threaddata {
-
-    char * hostname;
-    char * port;
-
-}
 
 
 void * clientproc(void * t) {
 
-    threaddata *td = (threaddata *) t;
+    struct threaddata *td = (struct threaddata *) t;
+
+    //printf("Thread %d started.\n", td->threadid);
 
     int sockfd, portno, n;
 
@@ -36,17 +41,19 @@ void * clientproc(void * t) {
 
     char buffer[256];
     /* create socket, get sockfd handle */
-
-    portno = atoi(td->hostname);
+    
+    portno = atoi(td->port);
+    //printf("hostname %s  port %d .\n", td->hostname, portno);
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
         error("ERROR opening socket");
 
     /* fill in server address in sockaddr_in datastructure */
 
-    server = gethostbyname( td->host );
+    server = gethostbyname( td->hostname);
     if (server == NULL) {
         fprintf(stderr, "ERROR, no such host\n");
+        error("ERROR, no such host\n");
         exit(0);
     }
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -59,10 +66,8 @@ void * clientproc(void * t) {
 
     // everything ahead has to be done by each thread
     /* connect to server */
-
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         error("ERROR connecting");
-
     // specify file number
     int filenumber = 0;  // decide yourself
     char *dest = (char *)malloc(sizeof(char) * 4);
@@ -70,7 +75,7 @@ void * clientproc(void * t) {
     char filename[] = "get files/file";
     strcat(filename, dest);
     strcat(filename, ".txt\0");
-    printf("%s\n", filename);
+    printf("%d - %s\n", td->threadid, filename);
     /* send user message to server */
 
     strcpy(buffer, filename); // so that none of further code changes
@@ -97,14 +102,15 @@ void * clientproc(void * t) {
         }
     }
     close(sockfd);
-
-
+    printf("Thread %d  quitting\n", td->threadid);
+    pthread_exit(NULL);
 
 }
 
 
 int main(int argc, char *argv[])
 {
+
     int sockfd, portno, n;
 
     struct sockaddr_in serv_addr;
@@ -112,7 +118,7 @@ int main(int argc, char *argv[])
 
     char buffer[256];
 
-    int rc; // what is this for
+    int rc, i; // what is this for
 
     if (argc < 3) {
         fprintf(stderr, "usage %s hostname port\n", argv[0]);
@@ -122,7 +128,9 @@ int main(int argc, char *argv[])
     pthread_t threads[NUM_THREADS];
     struct threaddata td[NUM_THREADS];
 
-    for (int i = 0; i < NUM_THREADS ; i++) {
+    printf("Starting all cleints \n");
+    for (i = 0; i < NUM_THREADS ; i++) {
+        td[i].threadid = i; 
         td[i].hostname = (char *) malloc(sizeof(char) * strlen(argv[1]));
         td[i].port = (char *) malloc(sizeof(char) * strlen(argv[2]));
         strcpy(td[i].hostname, argv[1]);
@@ -135,8 +143,12 @@ int main(int argc, char *argv[])
             error("Unable to create threads.");
             exit(-1);
         }
+        printf("Thread %d started\n", i );
 
     }
+
+    pthread_exit(NULL);
+
 
 
     return 0;

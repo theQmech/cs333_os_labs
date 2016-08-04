@@ -19,6 +19,7 @@ void error(char *msg)
 
 
 void sendFile(int sock_fd, char * fileaddress) {
+    
     printf("Started loading file %s\n", fileaddress );
     int input_fd = open(fileaddress, O_RDONLY);
     if (input_fd < 0)
