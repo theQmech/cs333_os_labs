@@ -1,9 +1,9 @@
 all:
-	gcc Client/multiclient.c -o client
+	gcc Client/multi-client.c -o client
 	gcc Server/server-mp.c -o server
 
 client:
-	gcc Client/multiclient -o client
+	gcc Client/multi-client -o client
 
 server:
 	gcc Server/server-mp.c -o server

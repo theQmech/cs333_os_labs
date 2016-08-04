@@ -97,6 +97,7 @@ int main(int argc, char *argv[])
         pid = fork();
 
         if (pid != 0) { // parent process
+            //call waitpid to reap dead children
             close(newsockfd);
         }
         else {
@@ -110,9 +111,9 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             int msglen = (unsigned) strlen(buffer);
-            char * fileaddress = (char *)malloc(sizeof(char) * (msglen - 5));
-            fileaddress = memcpy(fileaddress, &buffer[4], msglen - 5 );
-            fileaddress[msglen - 5] = '\0';
+            char * fileaddress = (char *)malloc(sizeof(char) * (msglen - 4));
+            fileaddress = memcpy(fileaddress, &buffer[4], msglen - 4 );
+            // fileaddress[msglen - 5] = '\0';
             close(sockfd);
             sendFile(newsockfd, fileaddress);
             exit(0);
