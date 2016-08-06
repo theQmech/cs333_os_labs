@@ -1,13 +1,24 @@
+#include <sys/types.h> 
+#include <sys/wait.h> 
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/sendfile.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <memory.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
+#include <sys/stat.h> 
 #include <fcntl.h>
+
+#define MAX_CONN 5
+#define READ_SIZE 1024
+#define MSG_SIZE 255
+#define FILE_NO 0
+#define MAX_FILE_ID 10000
+#define MAX(a, b) ((a>b)? a:b) 
 
 void error(char *msg)
 {
@@ -19,12 +30,13 @@ void error(char *msg)
 int reap(int numClients, pid_t * clientsPID, int * clientStatus) {
     int i, alldead = 1;
     for (i = 0; i < numClients ; i++) {
-        if ( clientStatus[i] ) { // children not dead or status not available
-            alldead = 0;
-            // call wait
-            clientsPID[i] = waitpid(clientsPID[i], &clientStatus[i] , WCONTINUED | WNOHANG | WUNTRACED);
+        if (clientStatus[i] ) { 
+			// children not dead or status not available
+			alldead = 0;
+			// call wait
+			clientsPID[i] = waitpid(clientsPID[i], &clientStatus[i] , WNOHANG);
             if (clientStatus[i] == 0)
-                printf(" Reaped child process %d \n", clientsPID[i]);
+                printf("Reaped child process %d \n", clientsPID[i]);
         }
     }
 
@@ -49,37 +61,27 @@ void sendFile(int sock_fd, char * fileaddress) {
     int input_fd = open(fileaddress, O_RDONLY);
     if (input_fd < 0)
         error("Error loading file. Invalid fileaddress");
-    char buffer[512];
-    int n = read(input_fd, buffer, 511 ) ;
-    if (n < 0)
-        error("Error reading file");
-    while (1 ) { // read from file in chunks of 255
+    char buffer[READ_SIZE+1];
+    int n;
 
-        if (n == 0) {
-            break;
-        }
-        else if (n < 0) {
-            error("Error reading from socket");
-        }
-        else {
+	while ((n = read(input_fd, buffer, READ_SIZE )) > 0){
+		//read in chunks of READ_SIZE
 
-            if (write(sock_fd, buffer, n ) < 0)
-                error("Error writing to socket");
+		if (write(sock_fd, buffer, n ) < 0)
+			error("Error writing to socket");
 
-            bzero(buffer, 512);
-            n = read(input_fd, buffer, 511 ) ;
-        }
+		bzero(buffer, READ_SIZE+1);
 
     }
+	if (n == 0) {printf("File %s sent successfully\n", fileaddress);}
+	else if (n < 0) {printf("Error reading from file socket");}
     close(input_fd);
-    // open the file cheack for errors
-    // sendfile check for errror
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]){
+
     int sockfd, newsockfd, portno, clilen;
-    char buffer[256];
+    char buffer[MSG_SIZE+1];
     struct sockaddr_in serv_addr, cli_addr;
     int n, numClients = 0, arraySize = 4; // base size of clients;
 
@@ -113,7 +115,7 @@ int main(int argc, char *argv[])
 
     /* listen for incoming connection requests */
 
-    listen(sockfd, 5);
+    listen(sockfd, MAX_CONN);
     clilen = sizeof(cli_addr);
     printf("Server started\n");
     /* accept a new request, create a newsockfd */
@@ -147,8 +149,9 @@ int main(int argc, char *argv[])
         else {
             /* read message from client */
             /* This is the client process */
-            bzero(buffer, 256);
-            n = read( newsockfd, buffer, 255 );
+            close(sockfd);
+            bzero(buffer, MSG_SIZE+1);
+            n = read( newsockfd, buffer, MSG_SIZE );
 
             if (n < 0) {
                 perror("ERROR reading from socket");
@@ -157,14 +160,12 @@ int main(int argc, char *argv[])
             int msglen = (unsigned) strlen(buffer);
             char * fileaddress = (char *)malloc(sizeof(char) * (msglen - 4));
             fileaddress = memcpy(fileaddress, &buffer[4], msglen - 4 );
-            // fileaddress[msglen - 5] = '\0';
-            close(sockfd);
+
             sendFile(newsockfd, fileaddress);
+			close(newsockfd);
             exit(0);
         }
 
-
-        // reap(numClients, clientsPID, clientStatus);
 
     }
 

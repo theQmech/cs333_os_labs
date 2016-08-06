@@ -1,13 +1,11 @@
-all:
-	gcc Client/multi-client.c -o client -w -pthread
-	gcc Server/server-mp.c -o server -w
+all: client server
 
-client:
-	gcc Client/multi-client -o client -w -pthread
+client: src/multi-client.c
+	gcc src/multi-client.c -o client -pthread
 
-server:
-	gcc Server/server-mp.c -o server -w
+server: src/server-mp.c
+	gcc src/server-mp.c -o server
 
 clean:
 	rm -f client server
-	rm *.txt
+

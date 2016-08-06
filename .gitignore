@@ -1,3 +1,4 @@
 *.pdf
 *.swp
+/lab2/build/*
 
