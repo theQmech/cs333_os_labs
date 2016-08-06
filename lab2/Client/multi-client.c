@@ -19,13 +19,13 @@ int SLEEP_TIME;
 int isRandom = 0;
 
 
-struct threaddata {
+struct threaddata
+{
 
     int threadid;
     char * hostname;
     char * port;
     int * requestCount;
-
 };
 
 
@@ -131,10 +131,9 @@ void * clientproc(void * t) {
         //printf("Elapsed Time %f\n", elapsedTime);
 
     }
-
+    
     printf("Thread %d  quitting. Count is %d \n", td->threadid, *td->requestCount);
     pthread_exit(NULL);
-
 }
 
 
@@ -191,12 +190,12 @@ int main(int argc, char *argv[])
     }
     int sum = 0;
 
-    for( i = 0; i< NUM_THREADS ; i++){
+    for ( i = 0; i < NUM_THREADS ; i++) {
         printf("%d ", numRequests[i] );
-        sum+=numRequests[i];
+        sum += numRequests[i];
     }
     printf("\nDone ! \n");
-    double throughput=sum*1.0/(RUN_TIME);
+    double throughput = sum * 1.0 / (RUN_TIME);
     printf("Throughput is %f reqs/sec.\n", throughput);
 
     return 0;
