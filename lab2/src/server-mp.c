@@ -12,6 +12,7 @@
 #include <memory.h>
 #include <sys/stat.h> 
 #include <fcntl.h>
+#include <pthread.h>
 
 #define MAX_CONN 5
 #define READ_SIZE 1024
@@ -27,33 +28,17 @@ void error(char *msg)
 }
 
 
-int reap(int numClients, pid_t * clientsPID, int * clientStatus) {
-    int i, alldead = 1;
-    for (i = 0; i < numClients ; i++) {
-        if (clientStatus[i] ) { 
-			// children not dead or status not available
-			alldead = 0;
-			// call wait
-			clientsPID[i] = waitpid(clientsPID[i], &clientStatus[i] , WNOHANG);
-            if (clientStatus[i] == 0)
-                printf("Reaped child process %d \n", clientsPID[i]);
-        }
-    }
+void * reap(void *t){
 
-    if (alldead == 1 && numClients > 0) {
-        // do something here
-        printf("All child processes reaped.\n");
-        alldead = 0;
-    }
-    else{
-
-        alldead = 1;
-    }
-
-    return alldead;
+	//reap all zombie process
+	int zomb;
+	while(1){
+		while((zomb = waitpid(-1, NULL, WNOHANG)) >0){
+			printf("[%d] child reaped\n", zomb);
+		}
+	}
+	pthread_exit(NULL);
 }
-
-
 
 void sendFile(int sock_fd, char * fileaddress) {
 
@@ -83,7 +68,7 @@ int main(int argc, char *argv[]){
     int sockfd, newsockfd, portno, clilen;
     char buffer[MSG_SIZE+1];
     struct sockaddr_in serv_addr, cli_addr;
-    int n, numClients = 0, arraySize = 4; // base size of clients;
+    int n; // base size of clients;
 
     pid_t *clientsPID = (pid_t *)malloc(sizeof(pid_t) * 4); //
     int *clientStatus = (int *)malloc(sizeof(int) * 4);
@@ -117,34 +102,25 @@ int main(int argc, char *argv[]){
 
     listen(sockfd, MAX_CONN);
     clilen = sizeof(cli_addr);
-    printf("Server started\n");
+    printf("Server started on port %d\n", portno);
     /* accept a new request, create a newsockfd */
-    pid_t pid;
-    int status = 1;
-    while (status) {
+    pid_t pid, zomb;
 
-        status = reap(numClients, clientsPID, clientStatus);
+	pthread_t rthread_id;
+	int t_rc = pthread_create(&rthread_id, NULL, reap, NULL);
+    
+	while (1) {
 
         newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-        if (newsockfd < 0)
-            error("ERROR on accept");
+        if (newsockfd <= 0)
+			error("ERROR on accept");
 
-        numClients++;
         pid = fork();
 
         if (pid != 0) { // parent process
             //call waitpid to reap dead children
-            if (numClients > arraySize ) {
-                arraySize = arraySize * 2;
-                clientsPID = realloc(clientsPID, arraySize * sizeof(int));
-                clientStatus = realloc(clientStatus, arraySize * sizeof(int));
-            }
-
-            clientsPID[numClients - 1 ] = pid;
-            clientStatus[numClients - 1] = 1;
-
-            close(newsockfd);
-
+            printf("[%d] child forked\n", pid);
+			close(newsockfd);
         }
         else {
             /* read message from client */
@@ -169,6 +145,7 @@ int main(int argc, char *argv[]){
 
     }
 
+	pthread_join(t_rc, NULL);
     printf("Server Quitting \n" );
 
 }
