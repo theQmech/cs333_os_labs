@@ -20,6 +20,7 @@
 #define FILE_NO 0
 #define MAX_FILE_ID 10000
 #define MAX(a, b) ((a>b)? a:b) 
+#define PRINT 0
 
 void error(char *msg)
 {
@@ -34,6 +35,7 @@ void * reap(void *t){
 	int zomb;
 	while(1){
 		while((zomb = waitpid(-1, NULL, WNOHANG)) >0){
+			if (PRINT)
 			printf("[%d] child reaped\n", zomb);
 		}
 	}
@@ -42,6 +44,7 @@ void * reap(void *t){
 
 void sendFile(int sock_fd, char * fileaddress) {
 
+	if (PRINT)
     printf("Started loading file %s\n", fileaddress );
     int input_fd = open(fileaddress, O_RDONLY);
     if (input_fd < 0)
@@ -58,7 +61,7 @@ void sendFile(int sock_fd, char * fileaddress) {
 		bzero(buffer, READ_SIZE+1);
 
     }
-	if (n == 0) {printf("File %s sent successfully\n", fileaddress);}
+	if (n == 0) {if (PRINT) printf("File %s sent successfully\n", fileaddress);}
 	else if (n < 0) {printf("Error reading from file socket");}
     close(input_fd);
 }
@@ -119,6 +122,7 @@ int main(int argc, char *argv[]){
 
         if (pid != 0) { // parent process
             //call waitpid to reap dead children
+			if (PRINT)
             printf("[%d] child forked\n", pid);
 			close(newsockfd);
         }

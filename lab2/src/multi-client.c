@@ -16,6 +16,7 @@
 #define FILE_NO 0
 #define MAX_FILE_ID 10000
 #define MAX(a, b) ((a>b)? a:b) 
+#define PRINT 0
 
 int NUM_THREADS;
 int RUN_TIME;
@@ -89,7 +90,8 @@ void * clientproc(void * t) {
 			filenumber = rand() % MAX_FILE_ID;
 		
 		char *request = (char *)malloc(sizeof(char)* (MSG_SIZE+1));
-		sprintf(request, "get files/file%d.txt", filenumber);
+		sprintf(request, "get files/foo%d.txt", filenumber);
+		if (PRINT)
 		printf("Thread %d: %s\n", td->threadid, request);
 		/* send user message to server */
 
@@ -107,20 +109,21 @@ void * clientproc(void * t) {
 			bzero(buffer, 256);
 			n = read(sockfd, buffer, 255 );
 		}
-		if (n == 0) printf("File recieved\n");
+		if (n == 0) if (PRINT) printf("File recieved\n");
 		else if (n == -1) error("Error reading from socket");
 		
 		close(sockfd);
 		
 		gettimeofday(&req_end, NULL);
 		curr_RT = req_end.tv_sec - req_start.tv_sec + 
-					(req_end.tv_usec - req_start.tv_usec)*0.001;
+					(req_end.tv_usec - req_start.tv_usec)*0.000001;
 		td->avg_RT = td->avg_RT + curr_RT;
 		*td->requestCount = *td->requestCount + 1 ;
 
 		sleep(SLEEP_TIME);
 		gettimeofday(&t2, NULL);
-		elapsedTime += (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec)*0.001;
+		elapsedTime += (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec)*0.000001;
 	}
 
 	printf("Thread %d exit. Count is %d.\n", td->threadid, *td->requestCount);
