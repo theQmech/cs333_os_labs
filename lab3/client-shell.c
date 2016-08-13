@@ -8,6 +8,8 @@
 #define MAX_TOKEN_SIZE 64
 #define MAX_NUM_TOKENS 64
 
+#define PRINT 0
+
 char **tokenize(char *line){
 	char **tokens = (char **)malloc(MAX_NUM_TOKENS * sizeof(char *));
 	char *token = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
@@ -15,9 +17,9 @@ char **tokenize(char *line){
 
 	for(i =0; i < strlen(line); i++){
 
-	char readChar = line[i];
+		char readChar = line[i];
 
-	if (readChar == ' ' || readChar == '\n' || readChar == '\t'){
+		if (readChar == ' ' || readChar == '\n' || readChar == '\t'){
 			token[tokenIndex] = '\0';
 			if (tokenIndex != 0){
 				tokens[tokenNo] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
@@ -47,45 +49,43 @@ void  main(void)
 		printf("Hello>");	 
 		bzero(line, MAX_INPUT_SIZE);
 		gets(line);			 
-		printf("Got command %s\n", line);
+		if (PRINT) printf("Got command %s\n", line);
 		line[strlen(line)] = '\n'; //terminate with new line
 		tokens = tokenize(line);
    
 		//do whatever you want with the commands, here we just print them
 
-		int n = 0;
+		int narg = 0;
 		for(i=0;tokens[i]!=NULL;i++){
-			printf("found token %s\n", tokens[i]);
-			++n;
+			if (PRINT) printf("found token %s\n", tokens[i]);
+			++narg;
 		}
+		if (narg == 0) continue;
 	   
 		//temporary block
-		char cdir[] = "cd";
-		if (strcmp(tokens[0], cdir) == 0){
-			printf("here\n");
-			if (n != 2){
+		if (strcmp(tokens[0], "cd") == 0){
+			if (narg != 2){
 				printf("cd accepts only one argument\n");
 			}
 			else if ( chdir(tokens[1]) != 0){
 				printf("Couldn't change directory to %s\n", tokens[1]);
 			}
+			continue;
 		}
 
-		//another temporary block
-		char list[] = "ls\0";
-		if (strcmp(tokens[0], list) == 0){
-			if (n != 1){
-				printf("ls accepts only one argument\n");
+		if (strcmp(tokens[0], "exit") == 0){
+			printf("Shell exiting\n");
+			break;
+		}
+
+		int child = fork();
+		if (child != 0){
+			if (waitpid(child, NULL, 0) != child){
+				printf("Error killing child\n");
 			}
-			int child = fork();
-			if (child != 0){
-				if (wait() != child){
-					printf("tera LoL ho gaya\n");
-				}
-			}
-			else{
-				execl("/bin/ls", "ls", "-l", (char *)0);
-			}
+		}
+		else{
+			execvp(tokens[0], tokens);
 		}
 
 		// Freeing the allocated memory	
