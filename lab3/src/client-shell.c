@@ -67,6 +67,7 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno){
 		waitpid(child, NULL, 0);
 	}
 	else{
+		int p[2];
 		char **tokens = (char **)malloc(6 * sizeof(char *));
 		for (int i=0; i<5; ++i){
 			tokens[i] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
@@ -93,9 +94,41 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno){
 			}
 			close(redir_fd);
 		}
+		else if (strcmp(usr_cmd[2], "|") == 0){
+			if (pipe(p) < 0){
+				printf("Pipe opening error");
+				exit(0);
+			}
+			if (fork() == 0){
+				dup2(p[1], 1);
+				close(p[0]);
+				close(p[1]);
+				runlinuxcmd(tokens);
+			}
+			char **temp;
+			if (fork() == 0){
+				dup2(p[0], 0);
+				close(p[0]);
+				close(p[1]);
+				temp = (char **) malloc(2*sizeof(char *));
+				temp[0] = (char *)malloc(MAX_TOKEN_SIZE*sizeof(char));
+				strcpy(temp[0], usr_cmd[3]);
+				temp[1] = NULL;
+				runlinuxcmd(temp);
+			}
+			close(p[0]);
+			close(p[1]);
+			wait(NULL);
+			wait(NULL);
+			for (int i=0; i<5; ++i) free(tokens[i]);
+			free(tokens);
+			for (int i=0; i<2; ++i) free(temp[i]);
+			free(temp);
+			exit(0);
+		}
 
 		runlinuxcmd(tokens);
-	
+
 		for (int i=0; i<5; ++i) free(tokens[i]);
 		free(tokens);
 	}
@@ -162,6 +195,9 @@ void main(void){
 				get_file(tokens, serv_name, serv_pno);
 			}	
 			else if (narg == 4 && (strcmp(tokens[2], ">")==0) ){
+				get_file(tokens, serv_name, serv_pno);
+			}
+			else if (narg == 4 && (strcmp(tokens[2], "|")==0) ){
 				get_file(tokens, serv_name, serv_pno);
 			}
 			else {
