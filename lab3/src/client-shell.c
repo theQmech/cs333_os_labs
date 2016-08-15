@@ -31,12 +31,12 @@ void * reap(void *t) {
 	while (1) {
 		if ((zomb = waitpid(*pid, NULL, WNOHANG)) > 0) {
 			if (PRINT) {
-				printf("Background process ended.\n");
 				printf("[%d] child reaped\n", zomb);
 			}
 			break;
 		}
 	}
+	char **tokens
 	pthread_exit(NULL);
 }
 
@@ -152,6 +152,38 @@ void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 	}
 }
 
+void get_bg(char **usr_cmd, char *serv_name, char *serv_pno) {
+
+	int child = 0;
+	if ( (child = fork()) != 0) {
+		//waitpid(child, NULL, 0);
+		pthread_t rthread_id;
+		int t_rc = pthread_create(&rthread_id, NULL, reap, (void *)&child);
+		pthread_join(t_rc, NULL);
+	}
+	else {
+
+		char ** tokens = (char**)malloc(6 * sizeof(char *));
+		for (int i = 0; i < 5; ++i) {
+			tokens[i] = (char*)malloc(MAX_TOKEN_SIZE * sizeof(char));
+		}
+
+		strcpy(tokens[0], "./get-one-file-sig");
+		strcpy(tokens[1], usr_cmd[1]);
+		strcpy(tokens[2], serv_name);
+		strcpy(tokens[3], serv_pno);
+		strcpy(tokens[4], "nodisplay");
+		tokens[5] = NULL;
+
+		runlinuxcmd(tokens);
+
+		for (int i = 0; i < 5; ++i) free(tokens[i]);
+		free(tokens);
+
+		exit(0); // exit after all children die
+
+	}
+}
 
 
 
@@ -225,6 +257,9 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 			}
 
 		runlinuxcmd(tokens);
+
+
+
 		for (int i = 0; i < 5; ++i) free(tokens[i]);
 		free(tokens);
 	}
@@ -328,6 +363,20 @@ void main(void) {
 			}
 			else if (narg == 4 && (strcmp(tokens[2], "|") == 0) ) {
 				get_file(tokens, serv_name, serv_pno);
+			}
+			else {
+				printf("Server not specified. Quitting.\n" );
+			}
+
+		}
+		else if (strcmp(tokens[0], "getbg") == 0) {
+			if (serv_added) {
+				if (narg == 2) {
+					get_bg(tokens, serv_name, serv_pno);
+				}
+				else {
+					printf("usage: getbg <file_path1>  \n");
+				}
 			}
 			else {
 				printf("Server not specified. Quitting.\n" );
