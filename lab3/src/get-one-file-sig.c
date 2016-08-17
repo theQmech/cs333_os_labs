@@ -17,7 +17,7 @@
 #define FILE_NO 0
 #define MAX_FILE_ID 10000
 #define MAX(a, b) ((a>b)? a:b) 
-#define PRINT 1
+#define PRINT 0
 
 int BYTES;
 
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]){
     }
 
 	portno = atoi(argv[3]);
-	printf("%d\n", portno);
+	if (PRINT) printf("%d\n", portno);
 	char DISP[] = "display\0";
 	int disp = strcmp(argv[4], DISP);
 

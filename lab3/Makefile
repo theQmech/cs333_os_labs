@@ -14,7 +14,7 @@ server: src/server-slow.c
 
 shell: src/client-shell.c
 	mkdir -p bin
-	gcc src/client-shell.c -o bin/client-shell
+	gcc src/client-shell.c -o bin/client-shell -pthread
 
 clean:
 	rm -rf bin/*

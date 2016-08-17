@@ -7,36 +7,81 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <errno.h>
 
 #define MAX_INPUT_SIZE 1024
 #define MAX_TOKEN_SIZE 64
 #define MAX_NUM_TOKENS 64
 #define MAX_SERV_SIZE 64
+#define NUM_PROC 64
+#define REAP_SLEEP_TIME 0.5
 #define PRINT 0				//to be used only for debugging
 
-//bohot fart hain, updae karna hain isko
-//should ideally send SIGINT to all foreground children
-void sig_handler(int signo) {
-	if (signo == SIGINT) {
-		printf("\nInterrrupt recieved... exitting\n");
-	}
-	exit(15);
+pid_t *bg_queue;		//array of background processes
+pthread_mutex_t lock;	//lock for access of *bg_queue
+int over; 				//exit command has been entered
+
+void error(char *msg)
+{
+    perror(msg);
+    exit(1);
 }
 
-void * reap(void *t) {
+void sig_handler(int signo) {
+	if (signo != SIGINT) return;
+	if (PRINT) printf("\nInterrupt recieved...%d \n", getpid());
+	int status = 0;
+	while ( waitpid(0, &status, 0) > 0){} 
+	// wait for all children with same pgid to die
+}
 
-	//reap all zombie process
-	int *pid = (int *)t;
-	int zomb;
-	while (1) {
-		if ((zomb = waitpid(*pid, NULL, WNOHANG)) > 0) {
-			if (PRINT) {
-				printf("[%d] child reaped\n", zomb);
-			}
+void enqueue(pid_t id){
+	pthread_mutex_lock(&lock);
+	for (int i=0; i<NUM_PROC; ++i){
+		if (bg_queue[i] == 0){
+			bg_queue[i] = id;
 			break;
 		}
 	}
-	char **tokens
+	pthread_mutex_unlock(&lock);
+	return;
+}
+
+void dequeue(pid_t id){
+	pthread_mutex_lock(&lock);
+	for (int i=0; i<NUM_PROC; ++i){
+		if (bg_queue[i] == id){
+			bg_queue[i] = 0;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&lock);
+	return;
+}
+
+void * reap(void *t){
+
+	//reap all zombie background process
+	pid_t pid;
+	int zomb;
+	int noBG = 1; // 1 iff bg_queue is empty
+	while (1){
+		noBG = 1;
+
+		for (int i=0; i<NUM_PROC; ++i){
+			if (bg_queue[i] == 0) continue;
+			noBG = 0;
+			if ((zomb = waitpid(bg_queue[i], NULL, WNOHANG)) > 0){
+				if (zomb != bg_queue[i]) error("incorrect pid reaped"); //sanity check
+				dequeue(bg_queue[i]);
+				printf("BG [%d] child reaped\n", zomb);
+			}
+		}
+		// over = 1 => exit command entered in shell
+		if (noBG && over) break;
+		sleep(REAP_SLEEP_TIME);
+	}
 	pthread_exit(NULL);
 }
 
@@ -67,23 +112,23 @@ char **tokenize(char *line) {
 	return tokens;
 }
 
-
 void runlinuxcmd(char **tokens) {
 	if (execvp(tokens[0], tokens) == -1) {
 		printf("Couldn't execute command %s\n", tokens[0]);
 		exit(0);
 	}
-	return;
 }
-
 
 void get_seq(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 
+	int status = 0;
 	int fileno = 1;
-	for (; fileno < narg ; fileno++) {
+	for (; fileno < narg ; fileno++){
+
 		int child = 0;
 		if ( (child = fork()) != 0) {
-			waitpid(child, NULL, 0);
+			waitpid(child, &status, 0);
+			// store error of wait in status and use it later
 		}
 		else {
 			char **tokens = (char **)malloc(6 * sizeof(char *));
@@ -97,14 +142,14 @@ void get_seq(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 			strcpy(tokens[4], "nodisplay");
 			tokens[5] = NULL;
 			runlinuxcmd(tokens);
-
-			for (int i = 0; i < 5; ++i) free(tokens[i]);
-			free(tokens);
-
+			//never return
 		}
+			
+		if (PRINT) printf("%d  %d\n", fileno, status);
+		if (status > 0) break; //status = 0 iff child exited normally
+		// if not then SIGINT was recieved, so don't continue
 	}
 }
-
 
 void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 
@@ -114,10 +159,8 @@ void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 	}
 	else {
 
-
 		int child2 = 0, status = 0;
 		for (int j = 0; j < narg - 1 ; j++) {
-
 
 			if ((child2 = fork()) != 0 ) {
 				//waitpid(child2, NULL, 0);
@@ -146,50 +189,45 @@ void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 		}
 
 		while ( wait(&status) > 0) ; // wait for all children to die
-		printf("All files downloaded. \n");
+		//printf("All files downloaded. \n");
 		exit(0); // exit after all children die
 
 	}
 }
 
-void get_bg(char **usr_cmd, char *serv_name, char *serv_pno) {
+void get_bg(char **usr_cmd, char *serv_name, char *serv_pno){
+	// maintain two queues, one that holds all BG processes
+	// another maintains all threads that reap the BG process
 
-	int child = 0;
-	if ( (child = fork()) != 0) {
-		//waitpid(child, NULL, 0);
-		pthread_t rthread_id;
-		int t_rc = pthread_create(&rthread_id, NULL, reap, (void *)&child);
-		pthread_join(t_rc, NULL);
+	char ** tokens = (char**)malloc(6 * sizeof(char *));
+	for (int i = 0; i < 5; ++i) {
+		tokens[i] = (char*)malloc(MAX_TOKEN_SIZE * sizeof(char));
 	}
-	else {
 
-		char ** tokens = (char**)malloc(6 * sizeof(char *));
-		for (int i = 0; i < 5; ++i) {
-			tokens[i] = (char*)malloc(MAX_TOKEN_SIZE * sizeof(char));
-		}
-
-		strcpy(tokens[0], "./get-one-file-sig");
-		strcpy(tokens[1], usr_cmd[1]);
-		strcpy(tokens[2], serv_name);
-		strcpy(tokens[3], serv_pno);
-		strcpy(tokens[4], "nodisplay");
-		tokens[5] = NULL;
-
+	strcpy(tokens[0], "./get-one-file-sig");
+	strcpy(tokens[1], usr_cmd[1]);
+	strcpy(tokens[2], serv_name);
+	strcpy(tokens[3], serv_pno);
+	strcpy(tokens[4], "nodisplay");
+	tokens[5] = NULL;
+	
+	int child = fork();
+	if ( child  != 0){
+		enqueue(child);
+		setpgid(child, child);
+		//enqueue and set pgid separately so that doesn't get SIGINT
+	}
+	else{
 		runlinuxcmd(tokens);
-
-		for (int i = 0; i < 5; ++i) free(tokens[i]);
-		free(tokens);
-
-		exit(0); // exit after all children die
-
 	}
+
+	for (int i = 0; i < 5; ++i) free(tokens[i]);
+	free(tokens);
 }
-
-
 
 void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 
-	// assumer usr_cmd passed is valid, do required checking in main()
+	// assume usr_cmd passed is valid, do required checking in main()
 
 	int child = 0;
 	if ((child = fork()) != 0) {
@@ -197,7 +235,7 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 	}
 	else {
 		int p[2];
-		char **tokens = (char **)malloc(6 * sizeof(char *));
+		char **tokens = (char **)malloc(MAX_NUM_TOKENS * sizeof(char *));
 		for (int i = 0; i < 5; ++i) {
 			tokens[i] = (char*)malloc(MAX_TOKEN_SIZE * sizeof(char));
 		}
@@ -208,7 +246,9 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 		strcpy(tokens[4], "display");
 		tokens[5] = NULL;
 
-		if (usr_cmd[2] != NULL)
+		if (usr_cmd[2] != NULL){
+
+			//handle redirect case case
 			if (strcmp(usr_cmd[2], ">") == 0) {
 				char *buf = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
 				strcpy(buf, usr_cmd[3]);
@@ -223,6 +263,9 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 				}
 				close(redir_fd);
 			}
+
+			// handle pipe case, separately
+			// doesn't return
 			else if (strcmp(usr_cmd[2], "|") == 0) {
 				if (pipe(p) < 0) {
 					printf("Pipe opening error");
@@ -239,10 +282,14 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 					dup2(p[0], 0);
 					close(p[0]);
 					close(p[1]);
-					temp = (char **) malloc(2 * sizeof(char *));
-					temp[0] = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
-					strcpy(temp[0], usr_cmd[3]);
-					temp[1] = NULL;
+					temp = (char **) malloc(MAX_TOKEN_SIZE * sizeof(char *));
+					int i=3;
+					while(usr_cmd[i] != NULL){
+						temp[i-3] = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
+						strcpy(temp[i-3], usr_cmd[i]);
+						++i;
+					}
+					temp[i] = NULL;
 					runlinuxcmd(temp);
 				}
 				close(p[0]);
@@ -251,27 +298,37 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 				wait(NULL);
 				for (int i = 0; i < 5; ++i) free(tokens[i]);
 				free(tokens);
-				for (int i = 0; i < 2; ++i) free(temp[i]);
+				for (int i = 0; i < MAX_NUM_TOKENS; ++i) free(temp[i]);
 				free(temp);
 				exit(0);
 			}
 
+		}
+
 		runlinuxcmd(tokens);
 
-
-
-		for (int i = 0; i < 5; ++i) free(tokens[i]);
+		for (int i = 0; i < MAX_NUM_TOKENS; ++i) free(tokens[i]);
 		free(tokens);
 	}
 }
 
 void main(void) {
+	
+	// initialize bg_queue with 0
+	bg_queue = (pid_t *)malloc(NUM_PROC * sizeof(pid_t));
+	for (int i=0; i<NUM_PROC; ++i) bg_queue[i] = 0;
+
+	pthread_t rthread_id; //reap thread
+	int t_rc = pthread_create(&rthread_id, NULL, reap, NULL);
+
+	pthread_mutex_init(&lock, NULL);
 
 	signal(SIGINT, sig_handler);
 
 	char line[MAX_INPUT_SIZE];
 	char **tokens;
-	int i, over = 0;
+	int i = 0;
+	over = 0;
 	int serv_added = 0;
 	char * serv_name = (char *) malloc(MAX_SERV_SIZE * sizeof(char *));
 	char * serv_pno = (char *) malloc(MAX_SERV_SIZE * sizeof(char *));
@@ -286,8 +343,6 @@ void main(void) {
 		if (PRINT) printf("Got command %s\n", line);
 		line[strlen(line)] = '\n'; //terminate with new line
 		tokens = tokenize(line);
-
-		//do whatever you want with the commands, here we just print them
 
 		int narg = 0;
 		for (i = 0; tokens[i] != NULL; i++) {
@@ -320,8 +375,14 @@ void main(void) {
 			}
 		}
 		else if (strcmp(tokens[0], "exit") == 0) {
-			printf("Shell exiting\n");
 			over = 1;
+			for (int i=0; i<NUM_PROC; ++i){
+				if (bg_queue[i] == 0) continue;
+				kill(bg_queue[i], SIGINT);
+				if (PRINT) printf("kill signal [%d]\n", bg_queue[i]);
+			}
+			pthread_join(rthread_id, NULL);
+			printf("Shell exiting\n");
 		}
 		else if (strcmp(tokens[0], "getfl") == 0) {
 			if (serv_added) {
@@ -329,6 +390,9 @@ void main(void) {
 					get_file(tokens, serv_name, serv_pno);
 				}
 				else if (narg == 4 && (strcmp(tokens[2], ">") == 0) ) {
+					get_file(tokens, serv_name, serv_pno);
+				}
+				else if (narg >= 4 && (strcmp(tokens[2], "|") == 0) ) {
 					get_file(tokens, serv_name, serv_pno);
 				}
 				else {
@@ -398,6 +462,8 @@ void main(void) {
 		}
 		free(tokens);
 	}
+
+	pthread_mutex_destroy(&lock);
 
 
 }

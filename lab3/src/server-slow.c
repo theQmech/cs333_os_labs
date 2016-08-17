@@ -28,7 +28,6 @@ void error(char *msg)
     exit(1);
 }
 
-
 void * reap(void *t){
 
 	//reap all zombie process
