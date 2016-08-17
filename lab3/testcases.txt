@@ -1,0 +1,148 @@
+
+TESTCASE [1] "cd"
+Hello>ls    
+client-shell  files  get-one-file  get-one-file-sig  server-slow
+Hello>cd ..
+Hello>ls
+bin  lab3.pdf  Makefile  maketokens  make-tokens.c  src  testcases.txt
+
+
+
+TESTCASE [2] "getfl files"
+Hello>getfl files/file2.txt
+Before you start
+• Read about and understand the structure of a typical shell: read an input string from the user,
+fork a child, exec a command executable, wait for the child, and repeat the process. Read
+about all variants of the wait and exec system calls - there are several of them, and you need to
+pick different variants under different circumstances.
+• Understand the basic structure of any shell code, e.g., the xv6 shell code.
+• Read the complete lab, especially the tips and guidelines towards the end of the lab carefully, to
+avoid spending too much time on some tricky parts of the lab.
+Hello>
+
+
+
+
+TESTCASE [3] "getfl files" with keyboard interrupt
+Hello>getfl files/file1.txt
+CS333: Operating Systems Lab
+Lab 3: Building a Shell
+Goal
+In this assignment, we will understand processes and signals by building a custom shell-based client for
+the file server of Lab 2.
+Before you start
+• Read about and understand the structure of a typical shell: read an input string from the user,
+fork a child, exec a command executable, wait for the child, and repeat the process. Read
+about all variants of the wait and exec system calls - there are several of them, and you need to
+pick different variants under different circumstances.
+• Understand the basic structure of any shell code, e.g., the xv6 shell code.
+• Read the complete lab, especially the tips and guidelines towards the end of the lab carefully, to
+avoid spending too much time on some tricky parts of the lab.
+Helper files
+Before you begin solving the lab, you must write some helper files, as instructed below.
+• Modify the server from Lab 2 to write a program called server-slow.c. This program will
+simply sleep for 1 second after every write into the socket. This exercise may not make much
+sense to you now, but it will be very useful for your debugging the lab. For many tasks in this lab,
+you will need your file download to last a very long time, so that you can perform some interesting
+tests (like signal handling) during the download. With your slow server, you can make downloads
+of even 2MB files to last a long time, so that you can easily debug.
+• Next, write a simple standalone client for the file server. Write a program called get-one-file.c
+that takes four arguments: the file name to fetch, the server IP address, server port number, and
+a variable to indicate whether the client should display the downloaded file contents on stdout or
+not. Your client can be a simple single threaded client that just sends one request to fetch one
+file and exits. (You should have already written something like this during your initial phases of
+building the client in Lab 2.) You may test it with the server of Lab 2 (or your slow server above).
+^CBelow
+
+Received SIGINT; downloaded 2048 bytes so far.
+
+Hello>  
+
+
+
+
+TESTCASE [4] getfl files/file2.txt | grep the
+Hello>getfl files/file2.txt | grep the
+• Read about and understand the structure of a typical shell: read an input string from the user,
+fork a child, exec a command executable, wait for the child, and repeat the process. Read
+about all variants of the wait and exec system calls - there are several of them, and you need to
+• Understand the basic structure of any shell code, e.g., the xv6 shell code.
+• Read the complete lab, especially the tips and guidelines towards the end of the lab carefully, to
+avoid spending too much time on some tricky parts of the lab.
+Hello>
+[NOTE: contents file2.txt specified on testcase 4 ] 
+
+
+
+
+TESTCASE [5] "getsq files/file1.txt files/file2.txt"
+Hello>getsq files/file1.txt files/file2.txt
+Hello>
+
+[DEBUG OUTPUT OF SERVER]
+[8213] child forked
+Started loading file files/file1.txt
+File files/file1.txt sent successfully
+[8213] child reaped
+[8215] child forked
+Started loading file files/file2.txt
+File files/file2.txt sent successfully
+[8215] child reaped
+
+# getting files happens sequentially
+
+
+
+
+TESTCASE [6] "getpl files/file1.txt files/file2.txt"
+Hello>getpl files/file1.txt files/file2.txt
+Hello>
+
+
+
+[DEBUG OUTPUT OF SERVER]
+[8278] child forked
+Started loading file files/file1.txt
+[8279] child forked
+Started loading file files/file2.txt
+File files/file2.txt sent successfully
+[8279] child reaped
+File files/file1.txt sent successfully
+[8278] child reaped
+
+# getting files happens in parallel
+
+
+TESTCASE [7] "getbg"
+Hello>getbg files/file1.txt      
+Hello>getbg files/file2.txt
+Hello>ls
+client-shell  files  get-one-file  get-one-file-sig  server-slow
+Hello> 
+
+[DEBUG OUTPUT OF SERVER]
+[8637] child forked  
+Started loading file files/file1.txt
+[8639] child forked
+Started loading file files/file2.txt
+File files/file2.txt sent successfully
+[8639] child reaped
+File files/file1.txt sent successfully
+[8637] child reaped
+
+
+#This test case shows we can run background processe
+
+
+
+
+
+
+TESTCASE [8] "getfl files/file1.txt > n.txt"
+Hello>getfl files/file1.txt > n.txt
+Hello>
+
+# creates file n.txt with contents of file1.txt
+
+
+
