@@ -24,58 +24,59 @@ int over; 				//exit command has been entered
 
 void error(char *msg)
 {
-    perror(msg);
-    exit(1);
+	perror(msg);
+	exit(1);
 }
 
-void sig_handler(int signo) {
+void sig_handler(int signo) { // signal handler
 	if (signo != SIGINT) return;
 	if (PRINT) printf("\nInterrupt recieved...%d \n", getpid());
 	int status = 0;
-	while ( waitpid(0, &status, 0) > 0){} 
+	while ( waitpid(0, &status, 0) > 0) {}
 	// wait for all children with same pgid to die
 }
 
-void enqueue(pid_t id){
-	pthread_mutex_lock(&lock);
-	for (int i=0; i<NUM_PROC; ++i){
-		if (bg_queue[i] == 0){
+void enqueue(pid_t id) { // to push bacground processes in bg_queue
+	pthread_mutex_lock(&lock); // lock the access
+	for (int i = 0; i < NUM_PROC; ++i) { // add it to queue
+		if (bg_queue[i] == 0) {
 			bg_queue[i] = id;
 			break;
 		}
 	}
-	pthread_mutex_unlock(&lock);
+	pthread_mutex_unlock(&lock); // release the access
 	return;
 }
 
-void dequeue(pid_t id){
-	pthread_mutex_lock(&lock);
-	for (int i=0; i<NUM_PROC; ++i){
-		if (bg_queue[i] == id){
+void dequeue(pid_t id) {
+	pthread_mutex_lock(&lock); // lock the access
+	for (int i = 0; i < NUM_PROC; ++i) {
+		if (bg_queue[i] == id) { // find the pid in queues and remove it
 			bg_queue[i] = 0;
 			break;
 		}
 	}
-	pthread_mutex_unlock(&lock);
+	pthread_mutex_unlock(&lock); // release it
 	return;
 }
 
-void * reap(void *t){
+void * reap(void *t) {
 
 	//reap all zombie background process
 	pid_t pid;
 	int zomb;
 	int noBG = 1; // 1 iff bg_queue is empty
-	while (1){
+	while (1) {
 		noBG = 1;
 
-		for (int i=0; i<NUM_PROC; ++i){
+		for (int i = 0; i < NUM_PROC; ++i) {
 			if (bg_queue[i] == 0) continue;
 			noBG = 0;
-			if ((zomb = waitpid(bg_queue[i], NULL, WNOHANG)) > 0){
+			if ((zomb = waitpid(bg_queue[i], NULL, WNOHANG)) > 0) {
 				if (zomb != bg_queue[i]) error("incorrect pid reaped"); //sanity check
 				dequeue(bg_queue[i]);
-				printf("BG [%d] child reaped\n", zomb);
+				if (PRINT)
+					printf("BG [%d] child reaped\n", zomb);
 			}
 		}
 		// over = 1 => exit command entered in shell
@@ -112,18 +113,18 @@ char **tokenize(char *line) {
 	return tokens;
 }
 
-void runlinuxcmd(char **tokens) {
+void runlinuxcmd(char **tokens) { // to run linux command in tokens[0] with arguments tokens
 	if (execvp(tokens[0], tokens) == -1) {
 		printf("Couldn't execute command %s\n", tokens[0]);
 		exit(0);
 	}
 }
 
-void get_seq(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
+void get_seq(char **usr_cmd, int narg, char *serv_name, char *serv_pno) { // get files sequentially
 
 	int status = 0;
 	int fileno = 1;
-	for (; fileno < narg ; fileno++){
+	for (; fileno < narg ; fileno++) {
 
 		int child = 0;
 		if ( (child = fork()) != 0) {
@@ -144,14 +145,14 @@ void get_seq(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 			runlinuxcmd(tokens);
 			//never return
 		}
-			
+
 		if (PRINT) printf("%d  %d\n", fileno, status);
 		if (status > 0) break; //status = 0 iff child exited normally
 		// if not then SIGINT was recieved, so don't continue
 	}
 }
 
-void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
+void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) { // get files in parallel
 
 	int child = 0;
 	if ( (child = fork()) != 0) {
@@ -179,7 +180,8 @@ void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 				strcpy(tokens[4], "nodisplay");
 				tokens[5] = NULL;
 
-				printf("child i %d\n", j);
+				if (PRINT)
+					printf("child i %d\n", j);
 				runlinuxcmd(tokens);
 
 				for (int i = 0; i < 5; ++i) free(tokens[i]);
@@ -195,7 +197,7 @@ void get_pl(char **usr_cmd, int narg, char *serv_name, char *serv_pno) {
 	}
 }
 
-void get_bg(char **usr_cmd, char *serv_name, char *serv_pno){
+void get_bg(char **usr_cmd, char *serv_name, char *serv_pno) {
 	// maintain two queues, one that holds all BG processes
 	// another maintains all threads that reap the BG process
 
@@ -210,14 +212,14 @@ void get_bg(char **usr_cmd, char *serv_name, char *serv_pno){
 	strcpy(tokens[3], serv_pno);
 	strcpy(tokens[4], "nodisplay");
 	tokens[5] = NULL;
-	
+
 	int child = fork();
-	if ( child  != 0){
+	if ( child  != 0) {
 		enqueue(child);
 		setpgid(child, child);
 		//enqueue and set pgid separately so that doesn't get SIGINT
 	}
-	else{
+	else {
 		runlinuxcmd(tokens);
 	}
 
@@ -225,7 +227,7 @@ void get_bg(char **usr_cmd, char *serv_name, char *serv_pno){
 	free(tokens);
 }
 
-void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
+void get_file(char **usr_cmd, char *serv_name, char *serv_pno) { // getfile
 
 	// assume usr_cmd passed is valid, do required checking in main()
 
@@ -246,13 +248,13 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 		strcpy(tokens[4], "display");
 		tokens[5] = NULL;
 
-		if (usr_cmd[2] != NULL){
+		if (usr_cmd[2] != NULL) {
 
 			//handle redirect case case
 			if (strcmp(usr_cmd[2], ">") == 0) {
 				char *buf = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
 				strcpy(buf, usr_cmd[3]);
-				int redir_fd = open(buf, O_WRONLY);
+				int redir_fd = open(buf, O_CREAT | O_WRONLY, 0666 ); //0666 correponds to read and write permissions to all
 				if (redir_fd == -1) {
 					printf("Couldn't open output file - %s\n", buf);
 					exit(0);
@@ -283,10 +285,10 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 					close(p[0]);
 					close(p[1]);
 					temp = (char **) malloc(MAX_TOKEN_SIZE * sizeof(char *));
-					int i=3;
-					while(usr_cmd[i] != NULL){
-						temp[i-3] = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
-						strcpy(temp[i-3], usr_cmd[i]);
+					int i = 3;
+					while (usr_cmd[i] != NULL) {
+						temp[i - 3] = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
+						strcpy(temp[i - 3], usr_cmd[i]);
 						++i;
 					}
 					temp[i] = NULL;
@@ -313,10 +315,10 @@ void get_file(char **usr_cmd, char *serv_name, char *serv_pno) {
 }
 
 void main(void) {
-	
+
 	// initialize bg_queue with 0
 	bg_queue = (pid_t *)malloc(NUM_PROC * sizeof(pid_t));
-	for (int i=0; i<NUM_PROC; ++i) bg_queue[i] = 0;
+	for (int i = 0; i < NUM_PROC; ++i) bg_queue[i] = 0;
 
 	pthread_t rthread_id; //reap thread
 	int t_rc = pthread_create(&rthread_id, NULL, reap, NULL);
@@ -376,7 +378,7 @@ void main(void) {
 		}
 		else if (strcmp(tokens[0], "exit") == 0) {
 			over = 1;
-			for (int i=0; i<NUM_PROC; ++i){
+			for (int i = 0; i < NUM_PROC; ++i) {
 				if (bg_queue[i] == 0) continue;
 				kill(bg_queue[i], SIGINT);
 				if (PRINT) printf("kill signal [%d]\n", bg_queue[i]);
