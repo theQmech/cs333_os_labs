@@ -178,20 +178,25 @@ int main(int argc, char *argv[]){
 		// accept connections and then lock&append
 		// 
 		// if we first lock, then accept and append
-		// then accept will block leading and threads 
+		// then accept will block and threads 
 		// will block as well(due to queue lock not being released)
 
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
         if (newsockfd <= 0)
 			error("ERROR on accept");
 
-		pthread_mutex_lock(&q_lock);
-		while(req_q.size() == QSIZE){
-			pthread_cond_wait(&full, &q_lock);
+		//QSIZE<=0 is treated as boundless queue
+		if (QSIZE > 0){
+			pthread_mutex_lock(&q_lock);
+			while(req_q.size() == QSIZE){
+				pthread_cond_wait(&full, &q_lock);
+			}
+			enqueue(newsockfd);
+			pthread_mutex_unlock(&q_lock);
 		}
-		enqueue(newsockfd);
-		pthread_mutex_unlock(&q_lock);
-
+		else{
+			enqueue(newsoxkfd);
+		}
     }
 
 	for (int i=0; i<NTHREAD; ++i){
