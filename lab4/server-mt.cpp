@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
+
 #include <sys/sendfile.h>
 #include <netinet/in.h>
 #include <memory.h>
@@ -47,7 +47,7 @@ void enqueue(int sockfd){
 	}
 	bool was_empty = req_q.empty();
 	req_q.push(sockfd);
-	if (PRINT) printf("Queue Size: %d", req_q.size());
+	if (PRINT) printf("Queue Size: %d\n", (int)req_q.size());
 	if (was_empty) pthread_cond_signal(&empty);
 	return;
 }
@@ -61,7 +61,7 @@ int dequeue(){
 	int sz = req_q.size();
 	int ret_val = req_q.front();
 	req_q.pop();
-	if (PRINT) printf("Queue Size: %d", req_q.size());
+	if (PRINT) printf("Queue Size: %d\n", (int)req_q.size());
 	if (QSIZE != 0 && sz == QSIZE) pthread_cond_signal(&full);
 	return ret_val;
 }
@@ -71,9 +71,9 @@ void *cli_handl(void *t){
 	int t_id = *(int *)t, n, newsockfd;
 
     char buffer[MSG_SIZE+1];
-	bzero(buffer, MSG_SIZE+1);
 
 	while(true){
+		bzero(buffer, MSG_SIZE+1);
 
 		pthread_mutex_lock(&q_lock);
 		while (req_q.empty()){
@@ -106,8 +106,10 @@ void sendFile(int sock_fd, char * fileaddress) {
 	if (PRINT)
     printf("Started loading file %s\n", fileaddress );
     int input_fd = open(fileaddress, O_RDONLY);
-    if (input_fd < 0)
-        error("Error loading file. Invalid fileaddress");
+    if (input_fd < 0){
+		printf("Error loading %s\n", fileaddress);
+        error(fileaddress);
+	}
     char buffer[READ_SIZE+1];
     int n;
 
