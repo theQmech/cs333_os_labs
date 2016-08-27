@@ -47,6 +47,7 @@ void enqueue(int sockfd){
 	}
 	bool was_empty = req_q.empty();
 	req_q.push(sockfd);
+	if (PRINT) printf("Queue Size: %d", req_q.size());
 	if (was_empty) pthread_cond_signal(&empty);
 	return;
 }
@@ -60,6 +61,7 @@ int dequeue(){
 	int sz = req_q.size();
 	int ret_val = req_q.front();
 	req_q.pop();
+	if (PRINT) printf("Queue Size: %d", req_q.size());
 	if (QSIZE != 0 && sz == QSIZE) pthread_cond_signal(&full);
 	return ret_val;
 }
@@ -79,6 +81,8 @@ void *cli_handl(void *t){
 		}
 		newsockfd = dequeue();
 		pthread_mutex_unlock(&q_lock);
+
+		if (PRINT) printf("Thread [%d] -> Socket [%d]", t_id, newsockfd);
 
 		n = read( newsockfd, buffer, MSG_SIZE );
 		
@@ -111,7 +115,7 @@ void sendFile(int sock_fd, char * fileaddress) {
 		//read in chunks of READ_SIZE
 
 		if (write(sock_fd, buffer, n ) < 0)
-			error("Error writing to socket");
+			fprintf(stderr, "Error writing to socket\n");
 
 		bzero(buffer, READ_SIZE+1);
 
@@ -195,7 +199,7 @@ int main(int argc, char *argv[]){
 			pthread_mutex_unlock(&q_lock);
 		}
 		else{
-			enqueue(newsoxkfd);
+			enqueue(newsockfd);
 		}
     }
 
