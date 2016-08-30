@@ -18,13 +18,13 @@
 
 using namespace std;
 
-#define MAX_CONN 5
+#define MAX_CONN 10000
 #define READ_SIZE 1024
 #define MSG_SIZE 255
 #define FILE_NO 0
 #define MAX_FILE_ID 10000
 #define MAX(a, b) ((a>b)? a:b) 
-#define PRINT 0
+#define PRINT 1
 
 queue<int> req_q;
 pthread_mutex_t q_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -32,7 +32,7 @@ pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
 int QSIZE, NTHREAD;
 
-void sendFile(int sock_fd, char * fileaddress); 
+void sendFile(int sock_fd, string fileaddress); 
 
 void error(string msg){
     perror(msg.c_str());
@@ -82,34 +82,36 @@ void *cli_handl(void *t){
 		newsockfd = dequeue();
 		pthread_mutex_unlock(&q_lock);
 
-		if (PRINT) printf("Thread [%d] -> Socket [%d]", t_id, newsockfd);
+		if (PRINT) printf("Thread [%d] -> Socket [%d]\n", t_id, newsockfd);
 
-		n = read( newsockfd, buffer, MSG_SIZE );
-		
+		n = read(newsockfd, buffer, MSG_SIZE );
 		if (n < 0) {
-		    perror("ERROR reading from socket");
+		    perror("ERROR reading request from socket");
 		    exit(1);
 		}
 	
-		int msglen = (unsigned) strlen(buffer);
-		char * fileaddress = (char *)malloc(sizeof(char) * (msglen - 4));
-		fileaddress = (char *)memcpy(fileaddress, &buffer[4], msglen - 4 );
-		
+		//int msglen = (unsigned) strlen(buffer);
+		//char * fileaddress = (char *)malloc(sizeof(char) * (msglen - 4));
+		//fileaddress = (char *)memcpy(fileaddress, &buffer[4], msglen - 4 );
+		if (buffer[0]!='g' || buffer[1]!='e' || buffer[2]!='t' || buffer[3]!=' '){
+			printf("Thread [%d]: Invalid request\n", t_id);
+		}
+		string fileaddress(&buffer[4]);
 		sendFile(newsockfd, fileaddress);
 		close(newsockfd);
 	}
 	pthread_exit(NULL);
 }
 
-void sendFile(int sock_fd, char * fileaddress) {
+void sendFile(int sock_fd, string fileaddress) {
 
-	if (PRINT)
-    printf("Started loading file %s\n", fileaddress );
-    int input_fd = open(fileaddress, O_RDONLY);
+	if (PRINT) printf("Started loading file %s\n", fileaddress.c_str() );
+    int input_fd = open(fileaddress.c_str(), O_RDONLY);
     if (input_fd < 0){
-		printf("Error loading %s\n", fileaddress);
-        error(fileaddress);
+		printf("Error loading %s\n", fileaddress.c_str());
+        error(fileaddress.c_str());
 	}
+
     char buffer[READ_SIZE+1];
     int n;
 
@@ -122,7 +124,7 @@ void sendFile(int sock_fd, char * fileaddress) {
 		bzero(buffer, READ_SIZE+1);
 
     }
-	if (n == 0) {if (PRINT) printf("File %s sent successfully\n", fileaddress);}
+	if (n == 0) {if (PRINT) printf("File %s sent successfully\n", fileaddress.c_str());}
 	else if (n < 0) {printf("Error reading from file socket");}
     close(input_fd);
 }
@@ -135,43 +137,35 @@ int main(int argc, char *argv[]){
     struct sockaddr_in serv_addr, cli_addr;
     int n; // base size of clients;
 
-    pid_t *clientsPID = (pid_t *)malloc(sizeof(pid_t) * 4); //
-    int *clientStatus = (int *)malloc(sizeof(int) * 4);
-
     if (argc != 4) {
         fprintf(stderr, "usage: %s <portno> <n_thread> <queue_size>\n", argv[0]);
         exit(1);
     }
+    portno = atoi(argv[1]);
 	NTHREAD = atoi(argv[2]);
 	QSIZE = atoi(argv[3]);
 
     /* create socket */
-
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         error("ERROR opening socket");
+	}
 
     /* fill in port number to listen on. IP address can be anything (INADDR_ANY) */
-
     bzero((char *) &serv_addr, sizeof(serv_addr));
-    portno = atoi(argv[1]);
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
 
     /* bind socket to this port number on this machine */
-
     if (bind(sockfd, (struct sockaddr *) &serv_addr,
              sizeof(serv_addr)) < 0)
         error("ERROR on binding");
 
     /* listen for incoming connection requests */
-
     listen(sockfd, MAX_CONN);
     clilen = sizeof(cli_addr);
     printf("Server started on port %d\n", portno);
     /* accept a new request, create a newsockfd */
-    pid_t pid, zomb;
 
 	pthread_t *rthread_id = new pthread_t[NTHREAD];
 	int *t_rc = new int[NTHREAD];
@@ -208,7 +202,10 @@ int main(int argc, char *argv[]){
 	for (int i=0; i<NTHREAD; ++i){
 		pthread_join(rthread_id[i], NULL);
 	}
+	delete[] rthread_id;
+	delete[] t_rc;
     printf("Server Quitting \n" );
 
+	return 0;
 }
 

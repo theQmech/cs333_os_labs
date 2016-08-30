@@ -1,6 +1,8 @@
 #include <stdlib.h>
-#include <string.h>
+#include <string>
+#include <cstring>
 #include <stdio.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,12 +13,16 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+using namespace std;
+
 #define READ_SIZE 1024
 #define MSG_SIZE 255
 #define FILE_NO 0
 #define MAX_FILE_ID 10000
 #define MAX(a, b) ((a>b)? a:b) 
 #define PRINT 0
+#define PRINT_FILE 0
+#define DEBUG 1
 
 int NUM_THREADS;
 int RUN_TIME;
@@ -26,107 +32,136 @@ int isRandom = 0;
 struct threaddata
 {
 	int threadid;
-	char * hostname;
-	char * port;
-	int * requestCount;
+	string hostname;
+	string port;
+	int requestCount;
+	int runtime;
+	int sleep_time;
 	double avg_RT;
 };
 
-void error(char *msg)
-{
-	perror(msg);
+void error(string msg){
+	perror(msg.c_str());
 	exit(0);
+	return;
 }
 
 void * clientproc(void * t) {
 
 	struct threaddata *td = (struct threaddata *) t;
 
-	int sockfd, portno, n;
+	int portno, n, sockfd;
 
 	struct sockaddr_in serv_addr;
-	struct hostent *server;
+	struct hostent server;
 
-	char buffer[MAX(MSG_SIZE, READ_SIZE)+1];
+	char buffer[MAX(MSG_SIZE, READ_SIZE) +1];
 
-	portno = atoi(td->port);
+	portno = atoi(td->port.c_str());
 
 	struct timeval t1, t2, req_start, req_end;
 	double elapsedTime = 0.0;
 	double curr_RT;
-	*td->requestCount = 0;
+	td->requestCount = 0;
 	td->avg_RT = 0.0;
 
-	while (elapsedTime < RUN_TIME) {
+
+	while (elapsedTime < td->runtime){
 
 		gettimeofday(&t1, NULL);
 
 		sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sockfd < 0)
+		if (sockfd == -1)
 			error("ERROR opening socket");
 
 		/* fill in server address in sockaddr_in datastructure */
 
-		server = gethostbyname(td->hostname);
-		if (server == NULL) {
+		char server_address_temp[5];
+		bzero(server_address_temp, 5);
+		struct hostent *server_t = gethostbyname(td->hostname.c_str());
+		if (server_t == NULL || server_t->h_addr==NULL) {
 			fprintf(stderr, "ERROR, no such host\n");
 			error("ERROR, no such host\n");
 			exit(0);
 		}
+		bcopy((char*)server_t->h_addr, (char*)server_address_temp, server_t->h_length);
+		bcopy(server_t, &server, sizeof(hostent));
 		bzero((char *) &serv_addr, sizeof(serv_addr));
 
 		serv_addr.sin_family = AF_INET;
-		bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+		bcopy(server_address_temp, (char *)&serv_addr.sin_addr.s_addr, server.h_length);
 		serv_addr.sin_port = htons(portno);
 
 		// everything ahead has to be done by each thread
 		/* connect to server */
-		if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-			error("ERROR connecting");
+		if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+			if (DEBUG) printf("T[%d]\tCan't connect to server\n", td->threadid);
+			gettimeofday(&t2, NULL);
+			elapsedTime += (t2.tv_sec - t1.tv_sec) + 
+					(t2.tv_usec - t1.tv_usec)*0.000001;
+			close(sockfd);
+			continue;
+		}
+		if (DEBUG) printf("T[%d]\tconnect[%d]\n", td->threadid, sockfd);
+		//	error("ERROR connecting");
 		// specify file number
 
 		int filenumber = 0;  // decide yourself
 		if (isRandom)
 			filenumber = rand() % MAX_FILE_ID;
 		
-		char *request = (char *)malloc(sizeof(char)* (MSG_SIZE+1));
-		sprintf(request, "get files/foo%d.txt", filenumber);
-		if (PRINT)
-		printf("Thread %d: %s\n", td->threadid, request);
 		/* send user message to server */
-
-		strcpy(buffer, request); // so that none of further code changes
+		bzero(buffer, MSG_SIZE+1);
+		sprintf(buffer, "get files/foo%d.txt", filenumber);
+		if (PRINT) printf("Thread %d: `%s`\n", td->threadid, buffer);
 
 		// make a file request to server
 		gettimeofday(&req_start, NULL);
 		n = write(sockfd, buffer, strlen(buffer) );
-		if (n < 0)
-			error("ERROR writing to socket");
-		bzero(buffer, READ_SIZE+1);
+		if (n <= 0){
+			error("Unable to make request to server\n");
+			gettimeofday(&t2, NULL);
+			elapsedTime += (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec)*0.000001;
+			close(sockfd);
+			continue;
+			//error("ERROR writing to socket");
+		}
+		if (DEBUG) printf("T[%d]\t`%s`\n", td->threadid, buffer);
 
 		// start reading from server
+		bzero(buffer, READ_SIZE+1);
 		while ((n = read(sockfd, buffer, READ_SIZE)) > 0){
-			bzero(buffer, 256);
-			n = read(sockfd, buffer, 255 );
+			if (PRINT_FILE) printf("%s", buffer);
+			bzero(buffer, READ_SIZE+1);
 		}
 		if (n == 0) if (PRINT) printf("File recieved\n");
-		else if (n == -1) error("Error reading from socket");
-		
+		else if (n == -1){
+			error("Error downloading file\n");
+			gettimeofday(&t2, NULL);
+			elapsedTime += (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec)*0.000001;
+			close(sockfd);
+			continue;
+			//error("Error reading from socket");
+		}
+		if(DEBUG) printf("T[%d]\tRecieved\n", td->threadid);
+
 		close(sockfd);
 		
 		gettimeofday(&req_end, NULL);
 		curr_RT = req_end.tv_sec - req_start.tv_sec + 
 					(req_end.tv_usec - req_start.tv_usec)*0.000001;
 		td->avg_RT = td->avg_RT + curr_RT;
-		*td->requestCount = *td->requestCount + 1 ;
+		td->requestCount = td->requestCount + 1 ;
 
-		sleep(SLEEP_TIME);
+		sleep(td->sleep_time);
 		gettimeofday(&t2, NULL);
 		elapsedTime += (t2.tv_sec - t1.tv_sec) + 
 				(t2.tv_usec - t1.tv_usec)*0.000001;
 	}
 
-	printf("Thread %d exit. Count is %d.\n", td->threadid, *td->requestCount);
+	printf("Thread %d exit. Count is %d.\n", td->threadid, td->requestCount);
 	pthread_exit(NULL);
 }
 
@@ -155,39 +190,38 @@ int main(int argc, char *argv[]){
 		isRandom = 1;
 	}
 	// threads resources
-	pthread_t threads[NUM_THREADS] ;
-	struct threaddata td[NUM_THREADS] ;
-	int numRequests[NUM_THREADS] ;
+	pthread_t *threads = new pthread_t[NUM_THREADS] ;
+	struct threaddata *td = new threaddata[NUM_THREADS] ;
 
 	printf("Starting all clients \n");
 	for (i = 0; i < NUM_THREADS ; i++){
 		td[i].threadid = i;
-		td[i].hostname = (char *) malloc(sizeof(char) * strlen(argv[1]));
-		td[i].port = (char *) malloc(sizeof(char) * strlen(argv[2]));
-		strcpy(td[i].hostname, argv[1]);
-		strcpy(td[i].port, argv[2]);
-		td[i].requestCount = &numRequests[i];
-		rc = pthread_create(&threads[i], NULL,
-							clientproc, (void *)&td[i]);
-
-		if (rc) {
+		td[i].hostname = string(argv[1]);
+		td[i].port = string(argv[2]);
+		td[i].runtime = RUN_TIME;
+		td[i].sleep_time = SLEEP_TIME;
+		td[i].requestCount = 0;
+		void *arg = (void*)&td[i];
+		rc = pthread_create(&threads[i], NULL, clientproc, arg);
+		if (rc){
 			error("Unable to create threads.");
-			exit(-1);
+			exit(1);
 		}
 		printf("Thread %d started\n", i );
-
 	}
+	printf("Hi\n");
 
 	for (i = 0; i < NUM_THREADS; i++) {
 		pthread_join(threads[i], NULL);
 	}
+	printf("Hi\n");
 
 	int sum = 0;
 	double AVT = 0.0;
 
 	for ( i = 0; i < NUM_THREADS ; i++) {
-		printf("Thread %d: %d, %f sec\n", i, numRequests[i], td[i].avg_RT);
-		sum += numRequests[i];
+		printf("Thread %d: %d, %f sec\n", i, td[i].requestCount, td[i].avg_RT);
+		sum += td[i].requestCount;
 		AVT += td[i].avg_RT;
 	}
 	AVT = AVT/sum;
@@ -197,5 +231,8 @@ int main(int argc, char *argv[]){
 	printf("Throughput is %f reqs/sec.\n", throughput);
 	printf("Average response time = %f\n", AVT);
 
+	delete[] threads;
+	delete[] td;
 	return 0;
 }
+
