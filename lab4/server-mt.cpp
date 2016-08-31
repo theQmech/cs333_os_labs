@@ -24,7 +24,7 @@ using namespace std;
 #define FILE_NO 0
 #define MAX_FILE_ID 10000
 #define MAX(a, b) ((a>b)? a:b) 
-#define PRINT 1
+#define PRINT 0
 
 queue<int> req_q;
 pthread_mutex_t q_lock = PTHREAD_MUTEX_INITIALIZER;

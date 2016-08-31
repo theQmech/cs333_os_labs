@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -22,7 +23,7 @@ using namespace std;
 #define MAX(a, b) ((a>b)? a:b) 
 #define PRINT 0
 #define PRINT_FILE 0
-#define DEBUG 1
+#define DEBUG 0
 
 int NUM_THREADS;
 int RUN_TIME;
@@ -32,8 +33,7 @@ int isRandom = 0;
 struct threaddata
 {
 	int threadid;
-	string hostname;
-	string port;
+	struct sockaddr_in *serv_addr;
 	int requestCount;
 	int runtime;
 	int sleep_time;
@@ -50,21 +50,15 @@ void * clientproc(void * t) {
 
 	struct threaddata *td = (struct threaddata *) t;
 
-	int portno, n, sockfd;
-
-	struct sockaddr_in serv_addr;
-	struct hostent server;
-
+	int n, sockfd;
+	
 	char buffer[MAX(MSG_SIZE, READ_SIZE) +1];
-
-	portno = atoi(td->port.c_str());
 
 	struct timeval t1, t2, req_start, req_end;
 	double elapsedTime = 0.0;
 	double curr_RT;
 	td->requestCount = 0;
 	td->avg_RT = 0.0;
-
 
 	while (elapsedTime < td->runtime){
 
@@ -74,27 +68,9 @@ void * clientproc(void * t) {
 		if (sockfd == -1)
 			error("ERROR opening socket");
 
-		/* fill in server address in sockaddr_in datastructure */
-
-		char server_address_temp[5];
-		bzero(server_address_temp, 5);
-		struct hostent *server_t = gethostbyname(td->hostname.c_str());
-		if (server_t == NULL || server_t->h_addr==NULL) {
-			fprintf(stderr, "ERROR, no such host\n");
-			error("ERROR, no such host\n");
-			exit(0);
-		}
-		bcopy((char*)server_t->h_addr, (char*)server_address_temp, server_t->h_length);
-		bcopy(server_t, &server, sizeof(hostent));
-		bzero((char *) &serv_addr, sizeof(serv_addr));
-
-		serv_addr.sin_family = AF_INET;
-		bcopy(server_address_temp, (char *)&serv_addr.sin_addr.s_addr, server.h_length);
-		serv_addr.sin_port = htons(portno);
-
 		// everything ahead has to be done by each thread
 		/* connect to server */
-		if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+		if (connect(sockfd, (struct sockaddr*)td->serv_addr, sizeof(*td->serv_addr)) < 0){
 			if (DEBUG) printf("T[%d]\tCan't connect to server\n", td->threadid);
 			gettimeofday(&t2, NULL);
 			elapsedTime += (t2.tv_sec - t1.tv_sec) + 
@@ -171,7 +147,7 @@ int main(int argc, char *argv[]){
 	int sockfd, portno, n;
 
 	struct sockaddr_in serv_addr;
-	struct hostent *server;
+	struct hostent *server_t;
 
 	char buffer[MSG_SIZE+1];
 
@@ -185,6 +161,7 @@ int main(int argc, char *argv[]){
 	NUM_THREADS = atoi(argv[3]);
 	RUN_TIME = atoi(argv[4]);
 	SLEEP_TIME = atoi(argv[5]);
+	portno = atoi(argv[2]);
 
 	if ( strcmp(argv[6], "random") == 0) {
 		isRandom = 1;
@@ -193,11 +170,25 @@ int main(int argc, char *argv[]){
 	pthread_t *threads = new pthread_t[NUM_THREADS] ;
 	struct threaddata *td = new threaddata[NUM_THREADS] ;
 
+	/* fill in server address in sockaddr_in datastructure */
+	server_t = gethostbyname(argv[1]);
+	if (server_t == NULL ) {
+		error("ERROR, no such host");
+		exit(0);
+	}
+	if (server_t->h_addr==NULL){
+		fprintf(stderr, "T[%d]\tserver_t->h_addr is NULL\n", td->threadid);
+		exit(0);
+	}
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	bcopy((char *)server_t->h_addr, (char*)&serv_addr.sin_addr.s_addr, server_t->h_length);
+	serv_addr.sin_port = htons(portno);
+
 	printf("Starting all clients \n");
 	for (i = 0; i < NUM_THREADS ; i++){
 		td[i].threadid = i;
-		td[i].hostname = string(argv[1]);
-		td[i].port = string(argv[2]);
+		td[i].serv_addr = &serv_addr;
 		td[i].runtime = RUN_TIME;
 		td[i].sleep_time = SLEEP_TIME;
 		td[i].requestCount = 0;
@@ -209,12 +200,10 @@ int main(int argc, char *argv[]){
 		}
 		printf("Thread %d started\n", i );
 	}
-	printf("Hi\n");
 
 	for (i = 0; i < NUM_THREADS; i++) {
 		pthread_join(threads[i], NULL);
 	}
-	printf("Hi\n");
 
 	int sum = 0;
 	double AVT = 0.0;
