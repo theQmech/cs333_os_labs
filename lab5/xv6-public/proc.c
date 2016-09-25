@@ -264,7 +264,7 @@ wait(void)
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
-//  - choose a process to run
+//  - choose process with maximum priority among RUNNABLE processes
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
@@ -278,7 +278,7 @@ scheduler(void)
     sti();
 
     int maxp = 0, first = 1;
-    // Loop over process table looking for process to run.
+    // Loop over process table looking for pfirstrocess to run.
     acquire(&ptable.lock);
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
       if (p->state != RUNNABLE)
@@ -290,7 +290,7 @@ scheduler(void)
           first = 0;
           continue;
         }
-        if (f->priority > maxp ) {
+        if (p->priority > maxp ) {
           f = p;
           maxp = p->priority;
         }
@@ -484,4 +484,14 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+setprio(int prio){
+
+  acquire(&ptable.lock);
+  proc->priority = prio;
+  release(&ptable.lock);
+  
+  return 0;
 }

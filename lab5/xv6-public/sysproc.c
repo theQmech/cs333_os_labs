@@ -99,22 +99,18 @@ sys_getppid(void)
 }
 
 // set priority of prcess as n
-
 int
-sys_setpriority(void){
+sys_setprio(void){
 
-    int n;
-    if(argint(0, &n) < 0)
-        return -1;
-
-    proc->priority = n;
-    return 0;
-
+  int prio;
+  if(argint(0, &prio) < 0)
+    return -1;
+  return setprio(prio);
 }
 
 // get priority of process
-
-int sys_getpriority(void){
+int
+sys_getprio(void){
 
     return proc->priority;
 }

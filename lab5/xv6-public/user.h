@@ -24,8 +24,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int getppid(void);
-int setpriority(int);
-int getpriority(void);
+int setprio(int);
+int getprio(void);
 
 
 // ulib.c

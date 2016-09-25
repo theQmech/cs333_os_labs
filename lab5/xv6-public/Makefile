@@ -187,6 +187,9 @@ clean:
 	.gdbinit \
 	$(UPROGS)
 
+simulate:
+	qemu-system-i386 -serial mon:stdio -hdb fs.img xv6.img -smp cores=4 -m 512
+
 # make a printout
 FILES = $(shell grep -v '^\#' runoff.list)
 PRINT = runoff.list runoff.spec README toc.hdr toc.ftr $(FILES)

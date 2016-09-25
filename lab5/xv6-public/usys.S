@@ -30,6 +30,6 @@ SYSCALL(sbrk)
 SYSCALL(sleep)
 SYSCALL(uptime)
 SYSCALL(getppid)
-SYSCALL(setpriority)
-SYSCALL(getpriority)
+SYSCALL(setprio)
+SYSCALL(getprio)
 

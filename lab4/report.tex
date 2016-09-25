@@ -1,0 +1,97 @@
+%=======================02-713 LaTeX template, following the 15-210 template==================
+%
+% You don't need to use LaTeX or this template, but you must turn your homework in as
+% a typeset PDF somehow.
+%
+% How to use:
+%    1. Update your information in section "A" below
+%    2. Write your answers in section "B" below. Precede answers for all 
+%       parts of a question with the command "\question{n}{desc}" where n is
+%       the question number and "desc" is a short, one-line description of 
+%       the problem. There is no need to restate the problem.
+%    3. If a question has multiple parts, precede the answer to part x with the
+%       command "\part{x}".
+%    4. If a problem asks you to design an algorithm, use the commands
+%       \algorithm, \correctness, \runtime to precede your discussion of the 
+%       description of the algorithm, its correctness, and its running time, respectively.
+%    5. You can include graphics by using the command \includegraphics{FILENAME}
+%
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage[margin=1in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt plus 1pt}
+\setlength{\headheight}{13.6pt}
+\newcommand\question[2]{\vspace{.25in}\hrule\textbf{#1: #2}\vspace{.5em}\hrule\vspace{.10in}}
+\renewcommand\part[1]{\vspace{.10in}\textbf{(#1)}}
+\newcommand\algorithm{\vspace{.10in}\textbf{Algorithm: }}
+\newcommand\correctness{\vspace{.10in}\textbf{Correctness: }}
+\newcommand\runtime{\vspace{.10in}\textbf{Running time: }}
+\pagestyle{fancyplain}
+\lhead{\textbf{\NAME\ }}
+\chead{\textbf{Lab \HWNUM}}
+\rhead{ \today}
+\begin{document}\raggedright
+%Section A==============Change the values below to match your information==================
+\newcommand\NAME{[CS333] Operating Systems Lab}  % your name
+\newcommand\ANDREWID{}     % your andrew id
+\newcommand\HWNUM{04}              % the homework number
+%Section B==============Put your answers to the questions below here=======================
+
+% no need to restate the problem --- the graders know which problem is which,
+% but replacing "The First Problem" with a short phrase will help you remember
+% which problem this is when you read over your homeworks to study.
+
+\begin{center}
+\center \textbf{Submitted by:}
+\end{center}
+\begin{table}[htb]
+\centering
+\begin{tabular}{ l r }
+ \hline
+ \textbf{Name} & \textbf{Roll No.} \\
+ \hline
+ Rupanshu Ganvir & 140050005 \\ 
+ Utkarsh Gautam & 140050009 \\
+ \hline
+\end{tabular}
+\end{table}
+
+
+\question{1}{Queue size unbounded} 
+
+We ran the experiment twice.
+
+The maximum throughput is achieved at N=3 or N=4.
+
+This is the number of worker threads that saturate the server.
+
+
+\question{2}{Queue size of one}
+
+The throughput keeps on increasing and doesn't stabilise. 
+
+Yes the clients are denied service in some runs and the connection times out.
+
+In our implementation in such a case, the client thread just continues 
+the next iteration of while loop.
+
+Also, the throughput is higher than that in Ex.1. 
+
+This can be explained as follows: When queue size is unbounded, the requests 
+are all \texttt{accept}ed by the server, but may not be served until some worker thread
+is ready to handle it. The thread was then context switched out.
+It might take some time for this thread to become active again.
+Lets say the client thread thus exists in a limbo state.
+
+On the other hand, in this exercise, since queue size is bounded, there can 
+only be a limited number of client thread in limbo state(ones that have been 
+\texttt{accept}ed but not served). Hence, the throughput is expected to be higher. 
+
+
+\flushright{* experimental data can be dound in \texttt{readme.txt}}
+
+\end{document}
