@@ -1,0 +1,45 @@
+The numbers to the left of the file names in the table are sheet numbers.
+The source code has been printed in a double column format with fifty
+lines per column, giving one hundred lines per sheet (or page).
+Thus there is a convenient relationship between line numbers and sheet numbers.
+
+
+# basic headers		# system calls		# string operations
+01 types.h		31 traps.h		66 string.c
+01 param.h		32 vectors.pl		
+02 memlayout.h		32 trapasm.S		# low-level hardware
+02 defs.h		33 trap.c		67 mp.h
+04 x86.h		34 syscall.h		69 mp.c
+06 asm.h		35 syscall.c		71 lapic.c
+07 mmu.h		36 sysproc.c		74 ioapic.c
+09 elf.h					75 picirq.c
+			# file system		76 kbd.h
+# entering xv6		37 buf.h		77 kbd.c
+10 entry.S		38 fcntl.h		78 console.c
+11 entryother.S		38 stat.h		81 timer.c
+12 main.c		39 fs.h			82 uart.c
+			40 file.h		
+# locks			41 ide.c		# user-level
+15 spinlock.h		43 bio.c		83 initcode.S
+15 spinlock.c		45 log.c		83 usys.S
+			47 fs.c			84 init.c
+# processes		56 file.c		84 sh.c
+17 vm.c			58 sysfile.c		
+23 proc.h		63 exec.c		# bootloader
+24 proc.c					90 bootasm.S
+29 swtch.S		# pipes			91 bootmain.c
+30 kalloc.c		64 pipe.c		
+			
+
+
+The source listing is preceded by a cross-reference that lists every defined 
+constant, struct, global variable, and function in xv6.  Each entry gives,
+on the same line as the name, the line number (or, in a few cases, numbers)
+where the name is defined.  Successive lines in an entry list the line
+numbers where the name is used.  For example, this entry:
+
+    swtch 2658
+        0374 2428 2466 2657 2658
+
+indicates that swtch is defined on line 2658 and is mentioned on five lines
+on sheets 03, 24, and 26.
