@@ -9,9 +9,32 @@
 #include "mmu.h"
 #include "spinlock.h"
 
+#define N_FRAMES (PHYSTOP-EXTMEM)/PGSIZE
+
 void freerange(void *vstart, void *vend);
 extern char end[]; // first address after kernel loaded from ELF file
 int count_freepg(void);
+
+struct {
+  uint cnt[N_FRAMES];
+  struct spinlock lock;
+} rtable;
+
+void init_rtable(void){
+  for (int i=0; i<N_FRAMES; ++i) rtable.cnt[i] = 0;
+}
+
+void incr_rtable(){
+  acquire(&rtable.lock);
+  //something
+  release(&rtable.lock);
+}
+
+void decr_rtable(){
+  acquire(&rtable.lock);
+  //something
+  release(&rtable.lock);
+}
 
 struct run {
   struct run *next;
@@ -21,6 +44,7 @@ struct {
   struct spinlock lock;
   int use_lock;
   struct run *freelist;
+  int freepg_cnt;
 } kmem;
 
 // Initialization happens in two phases.
@@ -34,6 +58,7 @@ kinit1(void *vstart, void *vend)
   initlock(&kmem.lock, "kmem");
   kmem.use_lock = 0;
   freerange(vstart, vend);
+  init_rtable();
 }
 
 void
@@ -73,6 +98,7 @@ kfree(char *v)
   r = (struct run*)v;
   r->next = kmem.freelist;
   kmem.freelist = r;
+  kmem.freepg_cnt++;
   if(kmem.use_lock)
     release(&kmem.lock);
 }
@@ -88,8 +114,10 @@ kalloc(void)
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    kmem.freepg_cnt--;
+  }
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;
@@ -97,11 +125,5 @@ kalloc(void)
 
 int
 count_freepg(void){
-	int ret = 0;
-	struct run *ptr = kmem.freelist;
-	while(ptr){
-		++ret;
-		ptr = ptr->next;
-	}
-	return ret;
+  return kmem.freepg_cnt;
 }
