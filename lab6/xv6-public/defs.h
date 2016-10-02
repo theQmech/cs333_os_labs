@@ -10,6 +10,8 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+typedef uint pte_t;
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -68,7 +70,9 @@ char*           kalloc(void);
 void            kfree(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
-int				count_freepg(void);
+int             count_freepg(void);
+void            incr_rtable(char*);
+void            decr_rtable(char*);
 
 // kbd.c
 void            kbdintr(void);
@@ -178,10 +182,12 @@ void            freevm(pde_t*);
 void            inituvm(pde_t*, char*, uint);
 int             loaduvm(pde_t*, char*, struct inode*, uint, uint);
 pde_t*          copyuvm(pde_t*, uint);
+pde_t*          copyuvm_cow(pde_t*, uint);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+pte_t*          walkpgdir(pde_t *pgdir, const void *va, int alloc);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

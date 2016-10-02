@@ -41,7 +41,7 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
-static pte_t *
+pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
@@ -188,6 +188,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
   if(sz >= PGSIZE)
     panic("inituvm: more than a page");
   mem = kalloc();
+  incr_rtable(mem);
   memset(mem, 0, PGSIZE);
   mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
   memmove(mem, init, sz);
@@ -239,6 +240,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     memset(mem, 0, PGSIZE);
+    incr_rtable(mem);
     if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
       deallocuvm(pgdir, newsz, oldsz);
@@ -272,6 +274,9 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       if(pa == 0)
         panic("kfree");
       char *v = P2V(pa);
+      // decrement reference count, and then free
+      // kfree adds to free pages only when reference count == 0
+      decr_rtable(v);
       kfree(v);
       *pte = 0;
     }
@@ -311,15 +316,47 @@ clearpteu(pde_t *pgdir, char *uva)
   *pte &= ~PTE_U;
 }
 
+// // Given a parent process's page table, create a copy
+// // of it for a child.
+// pde_t*
+// copyuvm(pde_t *pgdir, uint sz)
+// {
+//   pde_t *d;
+//   pte_t *pte;
+//   uint pa, i, flags;
+//   char *mem;
+
+//   if((d = setupkvm()) == 0)
+//     return 0;
+//   for(i = 0; i < sz; i += PGSIZE){
+//     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+//       panic("copyuvm: pte should exist");
+//     if(!(*pte & PTE_P))
+//       panic("copyuvm: page not present");
+//     pa = PTE_ADDR(*pte);
+//     flags = PTE_FLAGS(*pte);
+//     if((mem = kalloc()) == 0)
+//       goto bad;
+//     memmove(mem, (char*)P2V(pa), PGSIZE);
+//     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
+//       goto bad;
+//   }
+//   return d;
+
+// bad:
+//   freevm(d);
+//   return 0;
+// }
+
 // Given a parent process's page table, create a copy
 // of it for a child.
+// just change wrte permissions of page and copy page table
 pde_t*
 copyuvm(pde_t *pgdir, uint sz)
 {
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
-  char *mem;
 
   if((d = setupkvm()) == 0)
     return 0;
@@ -328,20 +365,102 @@ copyuvm(pde_t *pgdir, uint sz)
       panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P))
       panic("copyuvm: page not present");
+    
+    // change pte_w flag from {0,1} to 0
+    uint pte_temp = *pte;
+    pte_temp = pte_temp || PTE_W;
+    pte_temp = pte_temp ^ PTE_W;
+    *pte = pte_temp;
+    
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0)
       goto bad;
-    memmove(mem, (char*)P2V(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
-      goto bad;
+    incr_rtable(P2V(pa));
   }
+  lcr3(V2P(pgdir));
   return d;
 
 bad:
   freevm(d);
   return 0;
 }
+
+// Given a parent process's page table, create a copy
+// of it for a child.
+pde_t*
+copyuvm_cow(pde_t *pgdir, uint sz)
+{
+  pde_t *d;
+  pte_t *pte;
+  uint pa, i, flags, write;
+  char *mem;
+
+  // iterate and check if any page has ref_count >1
+  // if so then copy
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+      panic("copyuvm: pte should exist");
+    if(!(*pte & PTE_P))
+      panic("copyuvm: page not present");
+    flags = PTE_FLAGS(*pte) && PTE_W;
+    if (!flags){
+      // some page is not writable
+      write = 1;
+      break;
+    }
+  }
+
+  if (write){
+    //copy complete mem image
+    if((d = setupkvm()) == 0)
+      return 0;
+    
+    for(i = 0; i < sz; i += PGSIZE){
+      if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+        panic("copyuvm: pte should exist");
+      if(!(*pte & PTE_P))
+        panic("copyuvm: page not present");
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte) || PTE_W;
+      if((mem = kalloc()) == 0)
+        goto bad;
+      incr_rtable(mem);
+      decr_rtable(P2V(pa));
+      memmove(mem, (char*)P2V(pa), PGSIZE);
+      if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
+        goto bad;
+    }
+  }
+  else{
+    // just change permission bits
+    for(i = 0; i < sz; i += PGSIZE){
+      if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+        panic("copyuvm: pte should exist");
+      if(!(*pte & PTE_P))
+        panic("copyuvm: page not present");
+
+      // change pte_w flag from {0,1} to 1
+      uint pte_temp = *pte;
+      pte_temp = pte_temp || PTE_W;
+      *pte = pte_temp;
+
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte) || PTE_W;
+
+      if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0)
+        goto bad;
+    }
+    lcr3(V2P(pgdir));
+  }
+
+  return d;
+
+bad:
+  freevm(d);
+  return 0;
+}
+
 
 //PAGEBREAK!
 // Map user virtual address to kernel address.

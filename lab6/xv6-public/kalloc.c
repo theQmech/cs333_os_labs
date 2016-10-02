@@ -9,7 +9,7 @@
 #include "mmu.h"
 #include "spinlock.h"
 
-#define N_FRAMES (PHYSTOP-EXTMEM)/PGSIZE
+#define N_FRAMES (PHYSTOP)/PGSIZE
 
 void freerange(void *vstart, void *vend);
 extern char end[]; // first address after kernel loaded from ELF file
@@ -24,17 +24,24 @@ void init_rtable(void){
   for (int i=0; i<N_FRAMES; ++i) rtable.cnt[i] = 0;
 }
 
-void incr_rtable(){
+void incr_rtable(char *va){
   acquire(&rtable.lock);
   //something
+  rtable.cnt[V2P(va)>>PGSHIFT]++;
   release(&rtable.lock);
 }
 
-void decr_rtable(){
+void decr_rtable(char *va){
   acquire(&rtable.lock);
   //something
+  rtable.cnt[V2P(va)>>PGSHIFT]++;
   release(&rtable.lock);
 }
+
+int iszero_rtable(char *va){
+  return (rtable.cnt[V2P(va)>>PGSHIFT]==0);
+}
+
 
 struct run {
   struct run *next;
@@ -90,15 +97,19 @@ kfree(char *v)
   if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
     panic("kfree");
 
+
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
   if(kmem.use_lock)
     acquire(&kmem.lock);
-  r = (struct run*)v;
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  kmem.freepg_cnt++;
+  //decrement only when reference count is zero
+  if (iszero_rtable(v)){
+    r = (struct run*)v;
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+    kmem.freepg_cnt++;
+  }
   if(kmem.use_lock)
     release(&kmem.lock);
 }

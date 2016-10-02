@@ -36,6 +36,8 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
+  pde_t * new_pgdir;
+
   if(tf->trapno == T_SYSCALL){
     if(proc->killed)
       exit();
@@ -76,6 +78,26 @@ trap(struct trapframe *tf)
     cprintf("cpu%d: spurious interrupt at %x:%x\n",
             cpunum(), tf->cs, tf->eip);
     lapiceoi();
+    break;
+  case T_PGFLT:
+    cprintf("cpu%d: page fault by process %d\n",
+            proc->pid);
+
+    //check if access is illegal
+    // if so throw error
+    if (!(walkpgdir(proc->pgdir, (void *)rcr2(), 0) && PTE_P)){
+      cprintf("cpu%d: Illegal access by process %d\n",
+            proc->pid);
+      proc->killed = 1;
+      break;
+    }
+
+    // check in copuvm_cow if reference count of pages
+    // was just one, if so just change the flags and flush TLB
+    new_pgdir = copyuvm_cow(proc->pgdir, proc->sz);
+    if (!new_pgdir)
+      panic("copyuvm_cow!\n");
+    proc->pgdir = new_pgdir;
     break;
 
   //PAGEBREAK: 13
