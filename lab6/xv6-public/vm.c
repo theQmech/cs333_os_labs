@@ -368,10 +368,27 @@ copyuvm(pde_t *pgdir, uint sz)
     
     // change pte_w flag from {0,1} to 0
     uint pte_temp = *pte;
-    pte_temp = pte_temp || PTE_W;
-    pte_temp = pte_temp ^ PTE_W;
+    // {
+    //   uint msg_q = pte_temp & ~PTE_W;
+
+    //   char msg[33];
+    //   msg[32]='\0';
+    //   for (int i=0; i<32; ++i){
+    //     if (msg_q%2 == 0){
+    //       msg[31-i] = '0';
+    //     }
+    //     else{
+    //       msg[31-i] = '1';
+    //     }
+    //     msg_q/=2;
+    //   }
+    //   if (i == 0)
+    //   panic(msg);
+    // }
+    pte_temp = pte_temp & ~PTE_W;
     *pte = pte_temp;
     
+
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
     if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0)
@@ -393,7 +410,7 @@ copyuvm_cow(pde_t *pgdir, uint sz)
 {
   pde_t *d;
   pte_t *pte;
-  uint pa, i, flags, write;
+  uint pa, i, flags, write=0;
   char *mem;
 
   // iterate and check if any page has ref_count >1
@@ -403,7 +420,8 @@ copyuvm_cow(pde_t *pgdir, uint sz)
       panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P))
       panic("copyuvm: page not present");
-    flags = PTE_FLAGS(*pte) && PTE_W;
+    flags = PTE_FLAGS(*pte) & PTE_W;
+
     if (!flags){
       // some page is not writable
       write = 1;
@@ -422,7 +440,24 @@ copyuvm_cow(pde_t *pgdir, uint sz)
       if(!(*pte & PTE_P))
         panic("copyuvm: page not present");
       pa = PTE_ADDR(*pte);
-      flags = PTE_FLAGS(*pte) || PTE_W;
+      flags = PTE_FLAGS(*pte) | PTE_W;
+      // {
+      //   uint msg_q = PTE_FLAGS(*pte);
+
+      //   char msg[33];
+      //   msg[32]='\0';
+      //   for (int i=0; i<32; ++i){
+      //     if (msg_q%2 == 0){
+      //       msg[31-i] = '0';
+      //     }
+      //     else{
+      //       msg[31-i] = '1';
+      //     }
+      //     msg_q/=2;
+      //   }
+      //   if (i == 0)
+      //   panic(msg);
+      // }
       if((mem = kalloc()) == 0)
         goto bad;
       incr_rtable(mem);
@@ -442,15 +477,11 @@ copyuvm_cow(pde_t *pgdir, uint sz)
 
       // change pte_w flag from {0,1} to 1
       uint pte_temp = *pte;
-      pte_temp = pte_temp || PTE_W;
+      pte_temp = pte_temp | PTE_W;
       *pte = pte_temp;
 
-      pa = PTE_ADDR(*pte);
-      flags = PTE_FLAGS(*pte) || PTE_W;
-
-      if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0)
-        goto bad;
     }
+    d = pgdir;
     lcr3(V2P(pgdir));
   }
 

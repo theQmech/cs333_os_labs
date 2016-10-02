@@ -34,7 +34,7 @@ void incr_rtable(char *va){
 void decr_rtable(char *va){
   acquire(&rtable.lock);
   //something
-  rtable.cnt[V2P(va)>>PGSHIFT]++;
+  rtable.cnt[V2P(va)>>PGSHIFT]--;
   release(&rtable.lock);
 }
 
@@ -65,7 +65,6 @@ kinit1(void *vstart, void *vend)
   initlock(&kmem.lock, "kmem");
   kmem.use_lock = 0;
   freerange(vstart, vend);
-  init_rtable();
 }
 
 void
@@ -98,13 +97,12 @@ kfree(char *v)
     panic("kfree");
 
 
-  // Fill with junk to catch dangling refs.
-  memset(v, 1, PGSIZE);
-
   if(kmem.use_lock)
     acquire(&kmem.lock);
   //decrement only when reference count is zero
   if (iszero_rtable(v)){
+    // Fill with junk to catch dangling refs.
+    memset(v, 1, PGSIZE);
     r = (struct run*)v;
     r->next = kmem.freelist;
     kmem.freelist = r;
