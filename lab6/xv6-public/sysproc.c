@@ -93,3 +93,12 @@ sys_uptime(void)
 int sys_getNumFreePages(void){
 	return count_freepg();
 }
+
+int sys_getPhyAddr(void){
+  int n;
+  if(argint(0, &n) < 0)
+    return -1;
+  pte_t *pte =  walkpgdir(proc->pgdir, (void *)n, 0);
+
+  return PTE_ADDR(pte);
+}

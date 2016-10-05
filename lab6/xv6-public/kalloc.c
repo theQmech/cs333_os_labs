@@ -42,6 +42,10 @@ int iszero_rtable(char *va){
   return (rtable.cnt[V2P(va)>>PGSHIFT]==0);
 }
 
+int isone_rtable(char *va){
+  return (rtable.cnt[V2P(va)>>PGSHIFT]==1);
+}
+
 
 struct run {
   struct run *next;

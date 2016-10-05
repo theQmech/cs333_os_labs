@@ -368,27 +368,9 @@ copyuvm(pde_t *pgdir, uint sz)
     
     // change pte_w flag from {0,1} to 0
     uint pte_temp = *pte;
-    // {
-    //   uint msg_q = pte_temp & ~PTE_W;
-
-    //   char msg[33];
-    //   msg[32]='\0';
-    //   for (int i=0; i<32; ++i){
-    //     if (msg_q%2 == 0){
-    //       msg[31-i] = '0';
-    //     }
-    //     else{
-    //       msg[31-i] = '1';
-    //     }
-    //     msg_q/=2;
-    //   }
-    //   if (i == 0)
-    //   panic(msg);
-    // }
     pte_temp = pte_temp & ~PTE_W;
     *pte = pte_temp;
     
-
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
     if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0)
@@ -406,89 +388,36 @@ bad:
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm_cow(pde_t *pgdir, uint sz)
+copyuvm_cow(pde_t *pgdir, uint va)
 {
-  pde_t *d;
-  pte_t *pte;
-  uint pa, i, flags, write=0;
+  uint pa;
   char *mem;
 
-  // iterate and check if any page has ref_count >1
-  // if so then copy
-  for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-      panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
-    flags = PTE_FLAGS(*pte) & PTE_W;
+  pte_t * pte = walkpgdir(pgdir, (void*)va, 0);
+  if (!pte)
+    goto bad;
 
-    if (!flags){
-      // some page is not writable
-      write = 1;
-      break;
-    }
-  }
+  // some page is not writable
+  pa = PTE_ADDR(*pte);
 
-  if (write){
-    //copy complete mem image
-    if((d = setupkvm()) == 0)
-      return 0;
-    
-    for(i = 0; i < sz; i += PGSIZE){
-      if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-        panic("copyuvm: pte should exist");
-      if(!(*pte & PTE_P))
-        panic("copyuvm: page not present");
-      pa = PTE_ADDR(*pte);
-      flags = PTE_FLAGS(*pte) | PTE_W;
-      // {
-      //   uint msg_q = PTE_FLAGS(*pte);
-
-      //   char msg[33];
-      //   msg[32]='\0';
-      //   for (int i=0; i<32; ++i){
-      //     if (msg_q%2 == 0){
-      //       msg[31-i] = '0';
-      //     }
-      //     else{
-      //       msg[31-i] = '1';
-      //     }
-      //     msg_q/=2;
-      //   }
-      //   if (i == 0)
-      //   panic(msg);
-      // }
-      if((mem = kalloc()) == 0)
-        goto bad;
-      incr_rtable(mem);
-      decr_rtable(P2V(pa));
-      memmove(mem, (char*)P2V(pa), PGSIZE);
-      if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
-        goto bad;
-    }
+  if (isone_rtable((char *)va)){
+    *pte = *pte | PTE_W;
   }
   else{
-    // just change permission bits
-    for(i = 0; i < sz; i += PGSIZE){
-      if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-        panic("copyuvm: pte should exist");
-      if(!(*pte & PTE_P))
-        panic("copyuvm: page not present");
-
-      // change pte_w flag from {0,1} to 1
-      uint pte_temp = *pte;
-      pte_temp = pte_temp | PTE_W;
-      *pte = pte_temp;
-
-    }
-    d = pgdir;
-    lcr3(V2P(pgdir));
+    if((mem = kalloc()) == 0)
+      goto bad;
+    incr_rtable(mem);
+    decr_rtable(P2V(pa));
+    memmove(mem, (char*)P2V(pa), PGSIZE);
+    *pte = (V2P((uint)mem) | PTE_W | PTE_FLAGS(*pte));
   }
 
-  return d;
+  lcr3(V2P(pgdir));
+
+  return pgdir;
 
 bad:
-  freevm(d);
+  freevm(pgdir);
   return 0;
 }
 

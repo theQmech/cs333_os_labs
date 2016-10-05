@@ -24,6 +24,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int getNumFreePages(void);
+int getPhyAddr(int*);
 
 // ulib.c
 int stat(char*, struct stat*);

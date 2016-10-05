@@ -83,18 +83,18 @@ trap(struct trapframe *tf)
     cprintf("cpu%d: page fault by process %x\n",
             cpunum(), proc->pid);
 
-    //check if access is illegal
+    // check if access is illegal
     // if so throw error
-    // if (!(walkpgdir(proc->pgdir, (void *)rcr2(), 0) && PTE_P)){
-    //   cprintf("cpu%d: Illegal access by process %d\n",
-    //         proc->pid);
-    //   proc->killed = 1;
-    //   break;
-    // }
+    if (!(walkpgdir(proc->pgdir, (void *)rcr2(), 0) && PTE_P)){
+      cprintf("cpu%d: Illegal access by process %d\n",
+            proc->pid);
+      proc->killed = 1;
+      break;
+    }
 
     // check in copuvm_cow if reference count of pages
     // was just one, if so just change the flags and flush TLB
-    new_pgdir = copyuvm_cow(proc->pgdir, proc->sz);
+    new_pgdir = copyuvm_cow(proc->pgdir, rcr2());
     if (!new_pgdir)
       panic("copyuvm_cow!\n");
     proc->pgdir = new_pgdir;

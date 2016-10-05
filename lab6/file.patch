@@ -1,0 +1,719 @@
+Only in xv6-public/: bio.d
+Only in xv6-public/: bio.o
+Only in xv6-public/: bootasm.d
+Only in xv6-public/: bootasm.o
+Only in xv6-public/: bootblock
+Only in xv6-public/: bootblock.asm
+Only in xv6-public/: bootblock.o
+Only in xv6-public/: bootblockother.o
+Only in xv6-public/: bootmain.d
+Only in xv6-public/: bootmain.o
+Only in xv6-public/: _cat
+Only in xv6-public/: cat.asm
+Only in xv6-public/: cat.d
+Only in xv6-public/: cat.o
+Only in xv6-public/: cat.sym
+Only in xv6-public/: console.d
+Only in xv6-public/: console.o
+diff -crB xv6-orig/defs.h xv6-public/defs.h
+*** xv6-orig/defs.h	2016-10-02 23:54:49.180652092 +0530
+--- xv6-public/defs.h	2016-10-03 00:59:28.140773833 +0530
+***************
+*** 10,15 ****
+--- 10,17 ----
+  struct stat;
+  struct superblock;
+  
++ typedef uint pte_t;
++ 
+  // bio.c
+  void            binit(void);
+  struct buf*     bread(uint, uint);
+***************
+*** 68,73 ****
+--- 70,80 ----
+  void            kfree(char*);
+  void            kinit1(void*, void*);
+  void            kinit2(void*, void*);
++ int             count_freepg(void);
++ void            incr_rtable(char*);
++ void            decr_rtable(char*);
++ void            init_rtable(void);
++ int             isone_rtable(char*);
+  
+  // kbd.c
+  void            kbdintr(void);
+***************
+*** 177,186 ****
+--- 184,195 ----
+  void            inituvm(pde_t*, char*, uint);
+  int             loaduvm(pde_t*, char*, struct inode*, uint, uint);
+  pde_t*          copyuvm(pde_t*, uint);
++ pde_t*          copyuvm_cow(pde_t*, uint);
+  void            switchuvm(struct proc*);
+  void            switchkvm(void);
+  int             copyout(pde_t*, uint, void*, uint);
+  void            clearpteu(pde_t *pgdir, char *uva);
++ pte_t*          walkpgdir(pde_t *pgdir, const void *va, int alloc);
+  
+  // number of elements in fixed-size array
+  #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+Only in xv6-public/: _echo
+Only in xv6-public/: echo.asm
+Only in xv6-public/: echo.d
+Only in xv6-public/: echo.o
+Only in xv6-public/: echo.sym
+Only in xv6-public/: entry.o
+Only in xv6-public/: entryother
+Only in xv6-public/: entryother.asm
+Only in xv6-public/: entryother.d
+Only in xv6-public/: entryother.o
+Only in xv6-public/: exec.d
+Only in xv6-public/: exec.o
+Only in xv6-public/: file.d
+Only in xv6-public/: file.o
+Only in xv6-public/: _forktest
+Only in xv6-public/: forktest.asm
+Only in xv6-public/: forktest.d
+Only in xv6-public/: forktest.o
+Only in xv6-public/: fs.d
+Only in xv6-public/: fs.img
+Only in xv6-public/: fs.o
+Only in xv6-orig/: .git
+Only in xv6-public/: _grep
+Only in xv6-public/: grep.asm
+Only in xv6-public/: grep.d
+Only in xv6-public/: grep.o
+Only in xv6-public/: grep.sym
+Only in xv6-public/: ide.d
+Only in xv6-public/: ide.o
+Only in xv6-public/: _init
+Only in xv6-public/: init.asm
+Only in xv6-public/: initcode
+Only in xv6-public/: initcode.asm
+Only in xv6-public/: initcode.d
+Only in xv6-public/: initcode.o
+Only in xv6-public/: initcode.out
+Only in xv6-public/: init.d
+Only in xv6-public/: init.o
+Only in xv6-public/: init.sym
+Only in xv6-public/: ioapic.d
+Only in xv6-public/: ioapic.o
+diff -crB xv6-orig/kalloc.c xv6-public/kalloc.c
+*** xv6-orig/kalloc.c	2016-10-02 23:54:49.184652092 +0530
+--- xv6-public/kalloc.c	2016-10-03 00:57:05.640769361 +0530
+***************
+*** 9,16 ****
+--- 9,51 ----
+  #include "mmu.h"
+  #include "spinlock.h"
+  
++ #define N_FRAMES (PHYSTOP)/PGSIZE
++ 
+  void freerange(void *vstart, void *vend);
+  extern char end[]; // first address after kernel loaded from ELF file
++ int count_freepg(void);
++ 
++ struct {
++   uint cnt[N_FRAMES];
++   struct spinlock lock;
++ } rtable;
++ 
++ void init_rtable(void){
++   for (int i=0; i<N_FRAMES; ++i) rtable.cnt[i] = 0;
++ }
++ 
++ void incr_rtable(char *va){
++   acquire(&rtable.lock);
++   //something
++   rtable.cnt[V2P(va)>>PGSHIFT]++;
++   release(&rtable.lock);
++ }
++ 
++ void decr_rtable(char *va){
++   acquire(&rtable.lock);
++   //something
++   rtable.cnt[V2P(va)>>PGSHIFT]--;
++   release(&rtable.lock);
++ }
++ 
++ int iszero_rtable(char *va){
++   return (rtable.cnt[V2P(va)>>PGSHIFT]==0);
++ }
++ 
++ int isone_rtable(char *va){
++   return (rtable.cnt[V2P(va)>>PGSHIFT]==1);
++ }
++ 
+  
+  struct run {
+    struct run *next;
+***************
+*** 20,25 ****
+--- 55,61 ----
+    struct spinlock lock;
+    int use_lock;
+    struct run *freelist;
++   int freepg_cnt;
+  } kmem;
+  
+  // Initialization happens in two phases.
+***************
+*** 64,77 ****
+    if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+      panic("kfree");
+  
+-   // Fill with junk to catch dangling refs.
+-   memset(v, 1, PGSIZE);
+  
+    if(kmem.use_lock)
+      acquire(&kmem.lock);
+!   r = (struct run*)v;
+!   r->next = kmem.freelist;
+!   kmem.freelist = r;
+    if(kmem.use_lock)
+      release(&kmem.lock);
+  }
+--- 100,117 ----
+    if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+      panic("kfree");
+  
+  
+    if(kmem.use_lock)
+      acquire(&kmem.lock);
+!   //decrement only when reference count is zero
+!   if (iszero_rtable(v)){
+!     // Fill with junk to catch dangling refs.
+!     memset(v, 1, PGSIZE);
+!     r = (struct run*)v;
+!     r->next = kmem.freelist;
+!     kmem.freelist = r;
+!     kmem.freepg_cnt++;
+!   }
+    if(kmem.use_lock)
+      release(&kmem.lock);
+  }
+***************
+*** 87,96 ****
+    if(kmem.use_lock)
+      acquire(&kmem.lock);
+    r = kmem.freelist;
+!   if(r)
+      kmem.freelist = r->next;
+    if(kmem.use_lock)
+      release(&kmem.lock);
+    return (char*)r;
+  }
+  
+--- 127,142 ----
+    if(kmem.use_lock)
+      acquire(&kmem.lock);
+    r = kmem.freelist;
+!   if(r){
+      kmem.freelist = r->next;
++     kmem.freepg_cnt--;
++   }
+    if(kmem.use_lock)
+      release(&kmem.lock);
+    return (char*)r;
+  }
+  
++ int
++ count_freepg(void){
++   return kmem.freepg_cnt;
++ }
+\ No newline at end of file
+Only in xv6-public/: .kalloc.c.swp
+Only in xv6-public/: kalloc.d
+Only in xv6-public/: kalloc.o
+Only in xv6-public/: kbd.d
+Only in xv6-public/: kbd.o
+Only in xv6-public/: kernel
+Only in xv6-public/: kernel.asm
+Only in xv6-public/: kernel.sym
+Only in xv6-public/: _kill
+Only in xv6-public/: kill.asm
+Only in xv6-public/: kill.d
+Only in xv6-public/: kill.o
+Only in xv6-public/: kill.sym
+Only in xv6-public/: lapic.d
+Only in xv6-public/: lapic.o
+Only in xv6-public/: _ln
+Only in xv6-public/: ln.asm
+Only in xv6-public/: ln.d
+Only in xv6-public/: ln.o
+Only in xv6-public/: ln.sym
+Only in xv6-public/: log.d
+Only in xv6-public/: log.o
+Only in xv6-public/: _ls
+Only in xv6-public/: ls.asm
+Only in xv6-public/: ls.d
+Only in xv6-public/: ls.o
+Only in xv6-public/: ls.sym
+diff -crB xv6-orig/main.c xv6-public/main.c
+*** xv6-orig/main.c	2016-10-02 23:54:49.192652092 +0530
+--- xv6-public/main.c	2016-10-02 21:57:05.480430397 +0530
+***************
+*** 37,42 ****
+--- 37,43 ----
+    startothers();   // start other processors
+    kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
+    userinit();      // first user process
++   init_rtable();
+    mpmain();        // finish this processor's setup
+  }
+  
+Only in xv6-public/: main.d
+Only in xv6-public/: main.o
+diff -crB xv6-orig/Makefile xv6-public/Makefile
+*** xv6-orig/Makefile	2016-10-02 23:54:49.180652092 +0530
+--- xv6-public/Makefile	2016-10-02 21:21:24.000363187 +0530
+***************
+*** 173,178 ****
+--- 173,179 ----
+  	_usertests\
+  	_wc\
+  	_zombie\
++ 	_test_cow\
+  
+  fs.img: mkfs README $(UPROGS)
+  	./mkfs fs.img README $(UPROGS)
+***************
+*** 242,248 ****
+  EXTRA=\
+  	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
+  	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
+! 	printf.c umalloc.c\
+  	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
+  	.gdbinit.tmpl gdbutil\
+  
+--- 243,249 ----
+  EXTRA=\
+  	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
+  	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
+! 	printf.c umalloc.c test_cow.c \
+  	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
+  	.gdbinit.tmpl gdbutil\
+  
+Only in xv6-public/: _mkdir
+Only in xv6-public/: mkdir.asm
+Only in xv6-public/: mkdir.d
+Only in xv6-public/: mkdir.o
+Only in xv6-public/: mkdir.sym
+Only in xv6-public/: mkfs
+Only in xv6-public/: mp.d
+Only in xv6-public/: mp.o
+Only in xv6-public/: picirq.d
+Only in xv6-public/: picirq.o
+Only in xv6-public/: pipe.d
+Only in xv6-public/: pipe.o
+Only in xv6-public/: printf.d
+Only in xv6-public/: printf.o
+Only in xv6-public/: proc.d
+Only in xv6-public/: proc.o
+Only in xv6-public/: _rm
+Only in xv6-public/: rm.asm
+Only in xv6-public/: rm.d
+Only in xv6-public/: rm.o
+Only in xv6-public/: rm.sym
+Only in xv6-public/: _sh
+Only in xv6-public/: sh.asm
+Only in xv6-public/: sh.d
+Only in xv6-public/: sh.o
+Only in xv6-public/: sh.sym
+Only in xv6-public/: sleeplock.d
+Only in xv6-public/: sleeplock.o
+Only in xv6-public/: spinlock.d
+Only in xv6-public/: spinlock.o
+Only in xv6-public/: _stressfs
+Only in xv6-public/: stressfs.asm
+Only in xv6-public/: stressfs.d
+Only in xv6-public/: stressfs.o
+Only in xv6-public/: stressfs.sym
+Only in xv6-public/: string.d
+Only in xv6-public/: string.o
+Only in xv6-public/: swtch.o
+diff -crB xv6-orig/syscall.c xv6-public/syscall.c
+*** xv6-orig/syscall.c	2016-10-02 23:54:49.192652092 +0530
+--- xv6-public/syscall.c	2016-10-02 23:37:05.188618698 +0530
+***************
+*** 98,103 ****
+--- 98,105 ----
+  extern int sys_wait(void);
+  extern int sys_write(void);
+  extern int sys_uptime(void);
++ extern int sys_getNumFreePages(void);
++ extern int sys_getPhyAddr(void);
+  
+  static int (*syscalls[])(void) = {
+  [SYS_fork]    sys_fork,
+***************
+*** 121,126 ****
+--- 123,130 ----
+  [SYS_link]    sys_link,
+  [SYS_mkdir]   sys_mkdir,
+  [SYS_close]   sys_close,
++ [SYS_getNumFreePages]   sys_getNumFreePages,
++ [SYS_getPhyAddr]   sys_getPhyAddr,
+  };
+  
+  void
+Only in xv6-public/: syscall.d
+diff -crB xv6-orig/syscall.h xv6-public/syscall.h
+*** xv6-orig/syscall.h	2016-10-02 23:54:49.176652092 +0530
+--- xv6-public/syscall.h	2016-10-02 23:37:21.508619211 +0530
+***************
+*** 20,22 ****
+--- 20,24 ----
+  #define SYS_link   19
+  #define SYS_mkdir  20
+  #define SYS_close  21
++ #define SYS_getNumFreePages 22
++ #define SYS_getPhyAddr 23
+Only in xv6-public/: syscall.o
+Only in xv6-public/: sysfile.d
+Only in xv6-public/: sysfile.o
+diff -crB xv6-orig/sysproc.c xv6-public/sysproc.c
+*** xv6-orig/sysproc.c	2016-10-02 23:54:49.188652092 +0530
+--- xv6-public/sysproc.c	2016-10-02 23:41:49.848627632 +0530
+***************
+*** 89,91 ****
+--- 89,104 ----
+    release(&tickslock);
+    return xticks;
+  }
++ 
++ int sys_getNumFreePages(void){
++ 	return count_freepg();
++ }
++ 
++ int sys_getPhyAddr(void){
++   int n;
++   if(argint(0, &n) < 0)
++     return -1;
++   pte_t *pte =  walkpgdir(proc->pgdir, (void *)n, 0);
++ 
++   return PTE_ADDR(pte);
++ }
+\ No newline at end of file
+Only in xv6-public/: sysproc.d
+Only in xv6-public/: sysproc.o
+Only in xv6-public/: _test_cow
+Only in xv6-public/: test_cow.asm
+Only in xv6-public/: test_cow.c
+Only in xv6-public/: test_cow.d
+Only in xv6-public/: test_cow.o
+Only in xv6-public/: test_cow.sym
+Only in xv6-public/: timer.d
+Only in xv6-public/: timer.o
+Only in xv6-public/: trapasm.o
+diff -crB xv6-orig/trap.c xv6-public/trap.c
+*** xv6-orig/trap.c	2016-10-02 23:54:49.188652092 +0530
+--- xv6-public/trap.c	2016-10-03 00:35:08.492728022 +0530
+***************
+*** 36,41 ****
+--- 36,43 ----
+  void
+  trap(struct trapframe *tf)
+  {
++   pde_t * new_pgdir;
++ 
+    if(tf->trapno == T_SYSCALL){
+      if(proc->killed)
+        exit();
+***************
+*** 77,82 ****
+--- 79,104 ----
+              cpunum(), tf->cs, tf->eip);
+      lapiceoi();
+      break;
++   case T_PGFLT:
++     cprintf("cpu%d: page fault by process %x\n",
++             cpunum(), proc->pid);
++ 
++     // check if access is illegal
++     // if so throw error
++     if (!(walkpgdir(proc->pgdir, (void *)rcr2(), 0) && PTE_P)){
++       cprintf("cpu%d: Illegal access by process %d\n",
++             proc->pid);
++       proc->killed = 1;
++       break;
++     }
++ 
++     // check in copuvm_cow if reference count of pages
++     // was just one, if so just change the flags and flush TLB
++     new_pgdir = copyuvm_cow(proc->pgdir, rcr2());
++     if (!new_pgdir)
++       panic("copyuvm_cow!\n");
++     proc->pgdir = new_pgdir;
++     break;
+  
+    //PAGEBREAK: 13
+    default:
+Only in xv6-public/: trap.d
+Only in xv6-public/: trap.o
+Only in xv6-public/: uart.d
+Only in xv6-public/: uart.o
+Only in xv6-public/: ulib.d
+Only in xv6-public/: ulib.o
+Only in xv6-public/: umalloc.d
+Only in xv6-public/: umalloc.o
+diff -crB xv6-orig/user.h xv6-public/user.h
+*** xv6-orig/user.h	2016-10-02 23:54:49.188652092 +0530
+--- xv6-public/user.h	2016-10-02 23:49:08.804641409 +0530
+***************
+*** 23,28 ****
+--- 23,30 ----
+  char* sbrk(int);
+  int sleep(int);
+  int uptime(void);
++ int getNumFreePages(void);
++ int getPhyAddr(int*);
+  
+  // ulib.c
+  int stat(char*, struct stat*);
+Only in xv6-public/: _usertests
+Only in xv6-public/: usertests.asm
+diff -crB xv6-orig/usertests.c xv6-public/usertests.c
+*** xv6-orig/usertests.c	2016-10-02 23:54:49.188652092 +0530
+--- xv6-public/usertests.c	2016-10-01 03:45:36.812238457 +0530
+***************
+*** 1756,1761 ****
+--- 1756,1763 ----
+    }
+    close(open("usertests.ran", O_CREATE));
+  
++   printf(1, "Number of free pages: %d\n", getNumFreePages());
++ 
+    argptest();
+    createdelete();
+    linkunlink();
+Only in xv6-public/: usertests.d
+Only in xv6-public/: usertests.o
+Only in xv6-public/: usertests.sym
+Only in xv6-public/: usys.o
+diff -crB xv6-orig/usys.S xv6-public/usys.S
+*** xv6-orig/usys.S	2016-10-02 23:54:49.188652092 +0530
+--- xv6-public/usys.S	2016-10-03 00:10:06.616680885 +0530
+***************
+*** 29,31 ****
+--- 29,33 ----
+  SYSCALL(sbrk)
+  SYSCALL(sleep)
+  SYSCALL(uptime)
++ SYSCALL(getNumFreePages)
++ SYSCALL(getPhyAddr)
+Only in xv6-public/: vectors.o
+Only in xv6-public/: vectors.S
+diff -crB xv6-orig/vm.c xv6-public/vm.c
+*** xv6-orig/vm.c	2016-10-02 23:54:49.192652092 +0530
+--- xv6-public/vm.c	2016-10-03 00:58:53.808772755 +0530
+***************
+*** 41,47 ****
+  // Return the address of the PTE in page table pgdir
+  // that corresponds to virtual address va.  If alloc!=0,
+  // create any required page table pages.
+! static pte_t *
+  walkpgdir(pde_t *pgdir, const void *va, int alloc)
+  {
+    pde_t *pde;
+--- 41,47 ----
+  // Return the address of the PTE in page table pgdir
+  // that corresponds to virtual address va.  If alloc!=0,
+  // create any required page table pages.
+! pte_t *
+  walkpgdir(pde_t *pgdir, const void *va, int alloc)
+  {
+    pde_t *pde;
+***************
+*** 188,193 ****
+--- 188,194 ----
+    if(sz >= PGSIZE)
+      panic("inituvm: more than a page");
+    mem = kalloc();
++   incr_rtable(mem);
+    memset(mem, 0, PGSIZE);
+    mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
+    memmove(mem, init, sz);
+***************
+*** 239,244 ****
+--- 240,246 ----
+        return 0;
+      }
+      memset(mem, 0, PGSIZE);
++     incr_rtable(mem);
+      if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
+        cprintf("allocuvm out of memory (2)\n");
+        deallocuvm(pgdir, newsz, oldsz);
+***************
+*** 272,277 ****
+--- 274,282 ----
+        if(pa == 0)
+          panic("kfree");
+        char *v = P2V(pa);
++       // decrement reference count, and then free
++       // kfree adds to free pages only when reference count == 0
++       decr_rtable(v);
+        kfree(v);
+        *pte = 0;
+      }
+***************
+*** 311,325 ****
+    *pte &= ~PTE_U;
+  }
+  
+  // Given a parent process's page table, create a copy
+  // of it for a child.
+  pde_t*
+  copyuvm(pde_t *pgdir, uint sz)
+  {
+    pde_t *d;
+    pte_t *pte;
+    uint pa, i, flags;
+-   char *mem;
+  
+    if((d = setupkvm()) == 0)
+      return 0;
+--- 316,362 ----
+    *pte &= ~PTE_U;
+  }
+  
++ // // Given a parent process's page table, create a copy
++ // // of it for a child.
++ // pde_t*
++ // copyuvm(pde_t *pgdir, uint sz)
++ // {
++ //   pde_t *d;
++ //   pte_t *pte;
++ //   uint pa, i, flags;
++ //   char *mem;
++ 
++ //   if((d = setupkvm()) == 0)
++ //     return 0;
++ //   for(i = 0; i < sz; i += PGSIZE){
++ //     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
++ //       panic("copyuvm: pte should exist");
++ //     if(!(*pte & PTE_P))
++ //       panic("copyuvm: page not present");
++ //     pa = PTE_ADDR(*pte);
++ //     flags = PTE_FLAGS(*pte);
++ //     if((mem = kalloc()) == 0)
++ //       goto bad;
++ //     memmove(mem, (char*)P2V(pa), PGSIZE);
++ //     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
++ //       goto bad;
++ //   }
++ //   return d;
++ 
++ // bad:
++ //   freevm(d);
++ //   return 0;
++ // }
++ 
+  // Given a parent process's page table, create a copy
+  // of it for a child.
++ // just change wrte permissions of page and copy page table
+  pde_t*
+  copyuvm(pde_t *pgdir, uint sz)
+  {
+    pde_t *d;
+    pte_t *pte;
+    uint pa, i, flags;
+  
+    if((d = setupkvm()) == 0)
+      return 0;
+***************
+*** 328,341 ****
+        panic("copyuvm: pte should exist");
+      if(!(*pte & PTE_P))
+        panic("copyuvm: page not present");
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte);
+!     if((mem = kalloc()) == 0)
+!       goto bad;
+!     memmove(mem, (char*)P2V(pa), PGSIZE);
+!     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
+        goto bad;
+    }
+    return d;
+  
+  bad:
+--- 365,383 ----
+        panic("copyuvm: pte should exist");
+      if(!(*pte & PTE_P))
+        panic("copyuvm: page not present");
++     
++     // change pte_w flag from {0,1} to 0
++     uint pte_temp = *pte;
++     pte_temp = pte_temp & ~PTE_W;
++     *pte = pte_temp;
++     
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte);
+!     if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0)
+        goto bad;
++     incr_rtable(P2V(pa));
+    }
++   lcr3(V2P(pgdir));
+    return d;
+  
+  bad:
+***************
+*** 343,348 ****
+--- 385,427 ----
+    return 0;
+  }
+  
++ // Given a parent process's page table, create a copy
++ // of it for a child.
++ pde_t*
++ copyuvm_cow(pde_t *pgdir, uint va)
++ {
++   uint pa;
++   char *mem;
++ 
++   pte_t * pte = walkpgdir(pgdir, (void*)va, 0);
++   if (!pte)
++     goto bad;
++ 
++   // some page is not writable
++   pa = PTE_ADDR(*pte);
++ 
++   if (isone_rtable((char *)va)){
++     *pte = *pte | PTE_W;
++   }
++   else{
++     if((mem = kalloc()) == 0)
++       goto bad;
++     incr_rtable(mem);
++     decr_rtable(P2V(pa));
++     memmove(mem, (char*)P2V(pa), PGSIZE);
++     *pte = (V2P((uint)mem) | PTE_W | PTE_FLAGS(*pte));
++   }
++ 
++   lcr3(V2P(pgdir));
++ 
++   return pgdir;
++ 
++ bad:
++   freevm(pgdir);
++   return 0;
++ }
++ 
++ 
+  //PAGEBREAK!
+  // Map user virtual address to kernel address.
+  char*
+Only in xv6-public/: vm.d
+Only in xv6-public/: vm.o
+Only in xv6-public/: _wc
+Only in xv6-public/: wc.asm
+Only in xv6-public/: wc.d
+Only in xv6-public/: wc.o
+Only in xv6-public/: wc.sym
+Only in xv6-public/: xv6.img
+Only in xv6-public/: _zombie
+Only in xv6-public/: zombie.asm
+Only in xv6-public/: zombie.d
+Only in xv6-public/: zombie.o
+Only in xv6-public/: zombie.sym
