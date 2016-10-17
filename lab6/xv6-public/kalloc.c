@@ -16,7 +16,7 @@ extern char end[]; // first address after kernel loaded from ELF file
 int count_freepg(void);
 
 struct {
-  uint cnt[N_FRAMES];
+  int cnt[N_FRAMES];
   struct spinlock lock;
 } rtable;
 
@@ -46,6 +46,9 @@ int isone_rtable(char *va){
   return (rtable.cnt[V2P(va)>>PGSHIFT]==1);
 }
 
+int pref_count(char *va){
+  return rtable.cnt[V2P(va)>>PGSHIFT];
+}
 
 struct run {
   struct run *next;
@@ -111,6 +114,7 @@ kfree(char *v)
     r->next = kmem.freelist;
     kmem.freelist = r;
     kmem.freepg_cnt++;
+    cprintf("here");
   }
   if(kmem.use_lock)
     release(&kmem.lock);

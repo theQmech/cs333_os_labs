@@ -1,0 +1,194 @@
+%=======================02-713 LaTeX template, following the 15-210 template==================
+%
+% You don't need to use LaTeX or this template, but you must turn your homework in as
+% a typeset PDF somehow.
+%
+% How to use:
+%    1. Update your information in section "A" below
+%    2. Write your answers in section "B" below. Precede answers for all 
+%       parts of a question with the command "\question{n}{desc}" where n is
+%       the question number and "desc" is a short, one-line description of 
+%       the problem. There is no need to restate the problem.
+%    3. If a question has multiple parts, precede the answer to part x with the
+%       command "\part{x}".
+%    4. If a problem asks you to design an algorithm, use the commands
+%       \algorithm, \correctness, \runtime to precede your discussion of the 
+%       description of the algorithm, its correctness, and its running time, respectively.
+%    5. You can include graphics by using the command \includegraphics{FILENAME}
+%
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage[margin=1in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt plus 1pt}
+\setlength{\headheight}{13.6pt}
+\newcommand\question[2]{\vspace{.25in}\hrule\textbf{#1: #2}\vspace{.5em}\hrule\vspace{.10in}}
+\renewcommand\part[1]{\vspace{.10in}\textbf{(#1)}}
+\newcommand\algorithm{\vspace{.10in}\textbf{Algorithm: }}
+\newcommand\correctness{\vspace{.05in}\textbf{Correctness: }}
+\newcommand\runtime{\vspace{.05in}\textbf{Running time: }}
+\newcommand\anlys{\vspace{.05in}\textbf{Analysis: }}
+\pagestyle{fancyplain}
+\lhead{\textbf{\NAME\ [\ANDREWID]}}
+\chead{\textbf{Lab \HWNUM}}
+\rhead{ \today}
+\begin{document}\raggedright
+%Section A==============Change the values below to match your information==================
+\newcommand\NAME{Rupanshu Ganvir}  % your name
+\newcommand\ANDREWID{140050005}     % your andrew id
+\newcommand\HWNUM{7}              % the homework number
+%Section B==============Put your answers to the questions below here=======================
+
+% no need to restate the problem --- the graders know which problem is which,
+% but replacing "The First Problem" with a short phrase will help you remember
+% which problem this is when you read over your homeworks to study.
+
+\question{1}{NP vs. Log}
+
+\part{a}
+The reduction involves generating four clauses each polynomial in size of n.
+If we observe, each clause has a few iterators and that is all we need to 
+store in memory. The maximum number of iterators can be taken as constant.
+Each iterator takes $O(log(n))$ space. Hence, we are done.
+
+\part{b} Lets say SAT $\in$ Log. Consider instance $x$ of L $in$ NP. 
+\vspace{-0.10in}
+\begin{itemize}
+\setlength\itemsep{0.01in}
+\item Computing instance $y=f(x)$ of SAT takes $O(log(|x|))$ space. 
+\item $|y| = O(|x|^{c})$ for some $c > 0$.
+\item Space used by SAT = $O(log(|y|))$ = $O(log(O(|x|^c)))$ = $O(log(|x|))$.
+\end{itemize}
+\vspace{-0.10in}
+Overall space = $O(log(n))$ $\implies$ NP $\subseteq$ Log. Also,
+Log $\subseteq$ P $\subseteq$ NP. So, SAT $\in$ Log $\implies$ NP = Log\\
+\vspace{0.1in}
+We know SAT $\in$ NP. So NP = Log $\implies$ SAT $\in$ Log. 
+
+\part{c}
+Lets assume that the formula is in CNF. 
+\vspace{-0.10in}
+\begin{itemize}
+\setlength\itemsep{0.01in}
+\item Iterate over all clauses
+\item Iterate over all atoms in a clause
+\item If some atom is true, mark the clause as true and move to the next clause
+\item If no atom in a clause is true, REJECT
+\item If no clause is REJECted, ACCEPT.
+\end{itemize}
+\vspace{-0.1in}
+Iterating over atoms and the clauses needs two iterators. Total space: $O(log(n))$
+% ===================================================
+\question{3}{DFS in Log Space}
+Lets assume that all edges are undirected.\\
+We maintain three variables - $root$, $current$ and $previous$.
+\vspace{-0.10in}
+\begin{itemize}
+\setlength\itemsep{0.01in}
+\item Initialize $root$ to the first node in input, $current$ as $root$ and $previous$ as null.
+\item Find the neighbour of $current$ listed right after $previous$ in the edge relation of $curent$. If $previous$ was the last neighbour listed, start from the beginning.
+\item Output that neighbour and update $(current, previous) = (current.next, current)$
+\item Stop when all neighbours of $root$ have been iterated over.
+\item Run the procedure for $2|V|$ steps. If procedure hasn't stopped until then, REJECT, else ACCEPT.
+\end{itemize}
+\vspace{-0.1in}
+The overall traversal of graph is something like an inorder traversal. 
+Also, we note that this algorithm works for any undirected tree\\
+\anlys Storing $root$, $previous$, $current$ each requires $O(log(n))$ space. Sub-procedures 
+such as finding next neighbour in a cyclic order also consumes $O(log(n))$.
+% ===================================================
+
+\newpage
+
+\question{4}{Cycle in directed and undirected graphs}
+
+\part{a}
+Run a DFS(Problem 3) with each given node as $root$. $\exists$ cycle in graph iff DFS doesn't terminate for some node in $2|V|$ steps. Maintaining an iterator to run over all nodes requires more $log(|V|) = O(log(n))$ space. Hence, we are done.
+
+\part{b}
+We try to reduce REACH to CYCLE i.e. prove REACH ${\leq_{Log}}$ CYCLE. 
+Consider the standard configuration graph $G$. Now consider the $|V(G)|$-layering
+of G i.e. $G^{(V|G|)}$. If there is a path from $S_0$ to one of the good states,
+there exists a path from $S_0(0)$ to $S_{good}(k)$ for some k $\leq |V(G)|$.
+Lets add an edge from each $S_{good}(k)$ to $S_0$ so that a cycle is made.\\
+\vspace{0.1in}
+The size of the new graph is polynomial in size of original graph. Space
+required to construct it is also $O(log(n))$. We are done
+
+% ===================================================
+
+\question{5}{Savitch’s Theorem via matrix multiplication}
+\part{a} The only information that needs to be stored other than a few temporary values are the values of the three iterators - $i, j$ and $k$. Each one of them requires $O(log(n))$ space.\\
+Thus, boolean matrix multiplication can be achieved in logarithmic space.
+
+\part{b} Let $R(i, j, p)$ denote $A_{ij}^{p}$. Then $R(i, j, p) = \sum R(i, k, \floor*{p/2}).R(k, j, \ceil*{p/2})$.
+\begin{itemize}
+\setlength\itemsep{0.01in}
+ \item This is simlar to the logarithmic reduction used for REACH. 
+ \item $R(i, j, p) = 1$ iff at least one term in the summation $=1$ (boolean values).
+ \item To calculate each $R(i, j, p)$, iterate over k, calling a recursion each and every time, and exit immediately when one of the terms evaluates to 1.
+ \item Recursion depth = $O(log(p))$. Space required for iterators = $O(log(n))$
+\end{itemize}
+\vspace{-0.10in}
+Overall space = $O(log(n)log(p))$.
+
+\part{c} We use induction. Case $n=1$ is trivial. 
+Let $P(i,j, l)$ = $\exists$ path from $i$ to $j$ of length $\leq l$.\\
+\vspace{-0.20in}
+$$P(i, j, p+1) \iff \exists k . (P(i, k, p) \land P(k, j, 1)) \iff \sum{}{}P(i, k, p).P(k, j, 1) = ({A^{p}.A})_{ij} = A^{p+1}_{ij}$$
+Hence, proved.
+
+\part{d} 
+We use idea simlar to the commonly known proof of Savitch's theorem
+\vspace{-0.10in}
+\begin{itemize}
+\setlength\itemsep{0.01in}
+\item Size of configuration graph, $|V| = O(2^{O(S(n))})$, when $S(n) = \Omega(log(n))$.\\
+\item Maximum length of path = $|V|$. So use result from (c), and put $p=|V|$ to solve REACH.
+\item Space used =  $O(log(|V|))^{2} = O(S(n))^{2}$. For NL, $S(n) = log(n)$. So space used
+= $O(log(n))^{2}$.
+\end{itemize}
+\vspace{-0.10in}
+Thus, we solved NL in $DSPACE(log(n)^{2})$.
+
+% ===================================================
+\newpage
+\question{6}{Well formed paranthesis}
+\part{a} 
+\algorithm
+\vspace{-0.15in}
+\begin{itemize}
+\item Read input in one go, maintaining a variable $n$ initialized to zero. \\
+\item Increment $c$ by $1$ when $($ is read. Decrement by $1$ when $)$ is read.\\
+\item If $c$ ever becomes less than $0$, REJECT\\
+\item At the end of input, ACCEPT if $c=0$, else REJECT 
+\end{itemize}
+
+\correctness $\exists$ a matching $($ for each $)$ iff number of $($ upto that point $>0$.
+Similarly, each $($ should have a matching $)$, implying that at the end of input $c=0$.
+
+\anlys During execution, $c \leq 0$, thus $log(n)$ space is needed to maintain $c$\\
+\vspace{0.1in}
+Thus, $A$ is in $L$.
+
+\part{b} 
+The idea is similar to the previous part, except that we maintain count for each 
+type of paranthesis - $({n_1},{n_2}, ...)$, and another variable - ($last$) which stores position of last parenthesis which hasn't been closed yet.\\
+\vspace{-0.15in}
+\begin{itemize}
+\item At each step, if one encounters an opening bracket of type $i$, update $last$ and corresponding $n_i$.\\
+\item If closing bracket is encountered, decrement $n_i$ and update $last$ by traversing in reverse
+direction, 
+until an opening bracket is found which hasn't yet been closed (while travering backwards). This may require a sub-algorithm which will require $O(log(n))$ space
+\item Input string is valid iff each of $n_{i} \geq 0$ throughout and each $n_{i} = 0$ at the end.
+\end{itemize}
+
+\anlys Each of $n_i$ and $last$ require $log(n)$ space. Types of paranthesis is constant. 
+Thus, overall $O(log(n))$ space is needed.
+ 
+\end{document}

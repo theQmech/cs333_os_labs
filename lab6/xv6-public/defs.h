@@ -75,6 +75,7 @@ void            incr_rtable(char*);
 void            decr_rtable(char*);
 void            init_rtable(void);
 int             isone_rtable(char*);
+int             pref_count(char *va);
 
 // kbd.c
 void            kbdintr(void);

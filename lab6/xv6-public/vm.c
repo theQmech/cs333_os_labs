@@ -400,16 +400,20 @@ copyuvm_cow(pde_t *pgdir, uint va)
   // some page is not writable
   pa = PTE_ADDR(*pte);
 
-  if (isone_rtable((char *)va)){
+  if (isone_rtable((char *)P2V(pa))){
     *pte = *pte | PTE_W;
+    cprintf("[%d] PTE_W altered\n", proc->pid);
   }
   else{
     if((mem = kalloc()) == 0)
       goto bad;
+    cprintf("before ==> %d\t%d\n", pref_count((char*)mem), pref_count((char*)P2V(pa)));
     incr_rtable(mem);
     decr_rtable(P2V(pa));
+    cprintf("after  ==> %d\t%d\n", pref_count((char*)mem), pref_count((char*)P2V(pa)));
     memmove(mem, (char*)P2V(pa), PGSIZE);
-    *pte = (V2P((uint)mem) | PTE_W | PTE_FLAGS(*pte));
+    *pte = V2P(mem) | PTE_W | PTE_FLAGS(*pte);
+    cprintf("[%d] new page added, %d\n", proc->pid, pref_count((char *)mem));
   }
 
   lcr3(V2P(pgdir));
