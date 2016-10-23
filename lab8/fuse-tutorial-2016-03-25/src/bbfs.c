@@ -48,6 +48,10 @@
 
 struct file_node * getfilenode(struct fuse_file_info * fi);
 void free_inode(struct file_node *fi);
+char * get_hash(const char *buf);
+void decr_ref_count(const char *hash);
+void incr_ref_count(const char *hash);
+void update_inode(const char* path, struct file_node *inode);
 
 //  All the paths I see are relative to the root of the mounted
 //  filesystem.  In order to get to the underlying filesystem, I need to
@@ -359,7 +363,6 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 	int st = fread((void *)buf, sizeof(char), BLOCK_SZ, block_file);
 	fclose(block_file);
 	free_inode(inode);
-	free(inode);
 
 	if (st != BLOCK_SZ){
 		log_msg("bb_read Unsuccessful read\n");
@@ -406,7 +409,10 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset, struc
 
 	char *hash_str = get_hash(buf);
 
-	if (block_n < inode->n_blocks){
+	if (hash_str == NULL){
+		retstat = -1;
+	}
+	else if (block_n < inode->n_blocks){
 		decr_ref_count(inode->block[block_n]);
 		incr_ref_count(hash_str);
 
@@ -426,6 +432,8 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset, struc
 	else{
 		retstat = -1;
 	}
+
+	free_inode(inode);
 
 	return retstat;
 
