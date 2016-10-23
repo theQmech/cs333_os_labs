@@ -45,13 +45,88 @@
 #include "log.h"
 
 #define BLOCK_SZ 4096
+#define SIZE_HASH 41
 
-struct file_node * getfilenode(struct fuse_file_info * fi);
 void free_inode(struct file_node *fi);
+struct file_node * getfilenode(struct fuse_file_info * fi);
+int update_inode(const char* path, struct file_node *inode);
 char * get_hash(const char *buf);
 void decr_ref_count(const char *hash);
-void incr_ref_count(const char *hash);
-void update_inode(const char* path, struct file_node *inode);
+void incr_ref_count(const char *hash, const char *buf);
+
+void free_inode(struct file_node *fi){
+	for (int i=0; i<fi->n_blocks; ++i){
+		if (fi->block[i] != NULL){
+			free(fi->block[i]);
+		}
+	}
+	if (fi->block != NULL) free(fi->block);
+
+	free(fi);
+}
+
+struct file_node * getfilenode(struct fuse_file_info * fi){
+	int status;
+
+	struct file_node * ret = malloc(sizeof(struct file_node));
+	ret->size = 0;
+	ret->n_blocks = 0;
+	ret->block = NULL;
+
+	status = pread(fi->fh, &ret, sizeof(struct file_cnt), 0);
+	if (status == -1){
+		ret->size = 0;
+		ret->n_blocks = 0;
+		free_inode(ret);
+		return NULL;
+	}
+	ret->block = malloc(sizeof(char*)*ret->size);
+	for (int i=0; i<ret->size; ++i) ret->block[i] = NULL;
+
+	for (int i=0; i<ret->size; ++i){
+		status = pread(fi->fh, ret->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
+		if (status == -1){
+			free_inode(ret);
+			return NULL;
+		}
+	}
+
+	return ret;
+}
+
+int update_inode(const char* path, struct file_node *inode){
+	if (path == NULL || inode == NULL) return -1;
+	int ret = 0;
+
+	char realpath[400];
+	sprintf(realpath, "%s/%s", BB_DATA->rootdir, path);
+
+	int fd = open(realpath, O_WRONLY);
+	if (fd == -1){
+		log_error("update_inode: error opening file");
+		return -1;
+	}
+
+	int status = pwrite(fd, inode, sizeof(struct file_cnt), 0);
+	if(status != sizeof(struct file_cnt)){
+		log_error("update_inode, can't write file_cnt\n");
+		close(fd);
+		return -1;
+	}
+
+	for (int i=0; i<inode->size; ++i){
+		status = pwrite(fd, inode->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
+		if (status == -1){
+			log_error("update_inode, can't write block\n");
+			close(fd);
+			return -1;
+		}
+	}
+
+	close(fd);
+	return 0;
+}
+
 
 //  All the paths I see are relative to the root of the mounted
 //  filesystem.  In order to get to the underlying filesystem, I need to
@@ -414,14 +489,14 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset, struc
 	}
 	else if (block_n < inode->n_blocks){
 		decr_ref_count(inode->block[block_n]);
-		incr_ref_count(hash_str);
+		incr_ref_count(hash_str, buf);
 
 		strcpy(inode->block[block_n], hash_str);
 
 		update_inode(path, inode);
 	}
 	else if (block_n == inode->size){
-		incr_ref_count(hash_str);
+		incr_ref_count(hash_str, buf);
 		inode->size += BLOCK_SZ;
 		inode->n_blocks++;
 
@@ -1363,4 +1438,21 @@ void SHA1(
         SHA1Update(&ctx, (const unsigned char*)str + ii, 1);
     SHA1Final((unsigned char *)hash_out, &ctx);
     hash_out[20] = '\0';
+}
+
+char * get_hash(const char *buf){
+	char result[21];
+	char *hexresult = malloc(SIZE_HASH*sizeof(char));
+	size_t offset;
+
+	/* calculate hash */
+	SHA1( result, buf, BLOCK_SZ);
+
+	/* format the hash for comparison */
+	for( offset = 0; offset < 20; offset++) {
+		sprintf( ( hexresult + (2*offset)), "%02x", result[offset]&0xff);
+	}
+	hexresult[41] = '\0';
+
+	return hexresult;
 }
