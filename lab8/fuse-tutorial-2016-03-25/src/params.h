@@ -23,10 +23,26 @@
 // maintain bbfs state in here
 #include <limits.h>
 #include <stdio.h>
+#include <stdint.h>
 struct bb_state {
     FILE *logfile;
     char *rootdir;
 };
+
+struct file_cnt{
+	int n_blocks;
+	int size;
+};
+
+struct file_node{
+	int n_blocks;
+	int size;
+	char **block; //array of hashes each of length 40
+};
+
 #define BB_DATA ((struct bb_state *) fuse_get_context()->private_data)
 
+// takes fi, allocates and construct file_node from fi and returns the struct
+
 #endif
+
