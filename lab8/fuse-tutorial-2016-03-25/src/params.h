@@ -27,18 +27,6 @@ struct bb_state {
     FILE *logfile;
     char *rootdir;
 };
-
-struct file_cnt{
-	int n_blocks;
-	int size;
-};
-
-struct file_node{
-	int n_blocks;
-	int size;
-	uint8_t *block; //array of hashes
-}
-
 #define BB_DATA ((struct bb_state *) fuse_get_context()->private_data)
 
 #endif
