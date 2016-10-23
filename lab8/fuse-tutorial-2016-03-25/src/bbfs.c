@@ -127,6 +127,117 @@ int update_inode(const char* path, struct file_node *inode){
 	return 0;
 }
 
+// increment ref count 
+// check if hash.meta file exists
+// if not
+//			create two files 
+//					h.data . Write into it actual content
+//					h.meta . Write into it ref count
+// if present
+//			update the ref count of h.meta 
+void incr_ref_count(const char *hash, const char *buf){
+
+	char meta_file_path[200], data_file_path[200];
+	sprintf(meta_file_path, "%s/.META/%s.meta", BB_DATA->rootdir, hash);
+	sprintf(data_file_path, "%s/.META/%s.data", BB_DATA->rootdir, hash);
+
+	// check if both file exists
+	int n; // always to check count of read or written
+	int count;
+	int d_fd = open(data_file_path, O_RDWR);
+
+	if(d_fd < 0){
+		// create a file and write buf to it
+		d_fd = open(data_file_path, O_RDWR | O_CREAT);
+		
+		n = pwrite(d_fd, (void *)buf, sizeof(buf), 0 );
+		
+		if(n < 0){
+			log_msg("incr_ref_count::cannot write to .data .\n");
+			close(d_fd);
+			return;
+		}
+	}
+
+	int m_fd = open(meta_file_path, O_RDWR);
+
+	if(m_fd < 0){
+		// create the file and write to it 1
+		m_fd = open(meta_file_path, O_RDWR | O_CREAT);
+		count = 1;
+		n = pwrite(d_fd, (void *)count, sizeof(int), 0 );
+		if (n < 0 ){
+			log_msg("incr_ref_count::cannot write to .meta .\n");
+			close(m_fd);
+			return;
+		}
+	}
+	else{
+
+		n = pread(m_fd, (void *)count, sizeof(int), 0);
+
+		if( n < 0){
+			log_msg("incr_ref_count::Unsuccessful read count\n");
+			return;		
+		}
+
+		count++;
+
+		n = pwrite(m_fd, (void *)count, sizeof(int), 0 );
+
+		if(n < 0){
+			log_msg("incr_ref_count::Unsuccessful write count \n");
+			return;
+		}
+
+	}
+
+	return;
+
+}
+
+
+
+// decrement ref count
+// open h.meta . Decrease the ref count by one 
+
+void decr_ref_count(const char *hash){
+
+	//open file corresponding to hash
+	char meta_file_path[200];
+	sprintf(meta_file_path, "%s/.META/%s.meta", BB_DATA->rootdir, hash);
+
+	int count;
+	//read from block and close
+	int fd = open(meta_file_path, O_RDWR);
+
+	if (fd < 0 ){
+		log_msg("decr_ref_count::file does not exists .\n");
+		return;
+	}
+
+	int n = pread(fd, (void *)count, sizeof(int), 0);
+
+	if( n < 0){
+		log_msg("decr_ref_count::Unsuccessful read\n");
+		return;		
+	}
+
+	count--;
+
+	n = pwrite(fd, (void *)count, sizeof(int), 0 );
+
+	if(n < 0){
+		log_msg("decr_ref_count::Unsuccessful write\n");
+		return;
+	}
+
+	//close fd
+	close(fd);
+
+
+}
+
 
 //  All the paths I see are relative to the root of the mounted
 //  filesystem.  In order to get to the underlying filesystem, I need to
@@ -424,6 +535,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 
 	int block_n = offset/BLOCK_SZ;
 
+
 	if (inode->size < offset || block_n >= inode->n_blocks){
 		log_msg("bb_read out of bounds read\n");
 		return -1;
@@ -440,6 +552,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 	free_inode(inode);
 
 	if (st != BLOCK_SZ){
+
 		log_msg("bb_read Unsuccessful read\n");
 	}
 	else {
