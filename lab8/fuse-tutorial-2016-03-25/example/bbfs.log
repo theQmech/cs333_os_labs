@@ -1,0 +1,1821 @@
+
+bb_init()
+Initialized .META dir..
+    conn:
+    proto_major = 7
+    proto_minor = 23
+    async_read = 1
+    max_write = 131072
+    max_readahead = 131072
+    capable = 00000ffb
+    want = 00000010
+    max_background = 0
+    congestion_threshold = 0
+    context:
+    fuse = 0087f540
+    uid = 0
+    gid = 0
+    pid = 0
+    private_data = 0087e020
+    logfile = 0087f050
+    rootdir = /home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir
+    umask = 00000
+
+bb_getattr(path="/.xdg-volume-info", statbuf=0x24f82c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.xdg-volume-info", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.xdg-volume-info"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_access(path="/", mask=04)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+
+bb_opendir(path="/", fi=0x25783c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe20001c90
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001c90
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/autorun.inf", statbuf=0x24f82c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/autorun.inf", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/autorun.inf"
+
+bb_getattr(path="/", statbuf=0x1fffec60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned -1
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+    st_ctime = 0x00000000
+
+bb_readdir(path="/", buf=0x20001b00, filler=0x25f76ce0, offset=0, fi=0x25783c80)
+    readdir returned 0x0x7fbe20001cc0
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001c90
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001c90
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/.META", statbuf=0x24f82c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.META", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.META"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073280
+    st_mode = 040775
+    st_nlink = 2
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab92
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_releasedir(path="/", fi=0x1fffec90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001c90
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001c90
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/.Trash", statbuf=0x25783c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.Trash", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.Trash"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/.Trash-1000", statbuf=0x1fffec90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.Trash-1000", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.Trash-1000"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/", statbuf=0x1fffec60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    opendir returned 0x0x7fbe18009230
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18009230
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000bc0, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18009260
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18009230
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18009230
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18009230
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18009230
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x14000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe14000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x14000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe14000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x14000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe14000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+    opendir returned 0x0x7fbe180010e0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe180010e0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18001110
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe180010e0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe180010e0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe180010e0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe180010e0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x14000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe14000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x14000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe14000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x14000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe14000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe180010e0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe180010e0
+    lock_owner = 0x0000000000000000
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe18001110
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe180010e0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe180010e0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1fffec90)
+    fi:
+    flags = 0x00000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    fh_old = 0x7fbe180010e0
+    writepage = 0
+    opendir returned 0x0x7fbe18009120
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18009120
+    lock_owner = 0x0000000000000000
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe180010e0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000bc0, filler=0x25f76ce0, offset=0, fi=0x25783c80)
+    readdir returned 0x0x7fbe18009150
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18009120
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18009120
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18009120
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18009120
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x25783c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe20001e40
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x24f82c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x20001b00, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe20001e70
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x24f82c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x25783c80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1f7fdc80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe0c000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x24f82c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x0c000990, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe0c000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe0c000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x24f82c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe0c000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x25783c80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1f7fdc80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe0c000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1fffec60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x0c000990, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe0c000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe0c000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1fffec90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe0c000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x18000b40, filler=0x25f76ce0, offset=0, fi=0x25783c80)
+    readdir returned 0x0x7fbe18000d00
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x25783c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe20001e40
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1fffec60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x20001b00, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe20001e70
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1fffec90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/autorun.inf", statbuf=0x24f82c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/autorun.inf", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/autorun.inf"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_access(path="/", mask=01)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00008000
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_access(path="/", mask=02)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+
+bb_getattr(path="/.git", statbuf=0x1fffec90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.git", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.git"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/.git", statbuf=0x24f82c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.git", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.git"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_getattr(path="/HEAD", statbuf=0x1f7fdc90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/HEAD", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/HEAD"
+    lstat returned -1
+    ERROR lstat: No such file or directory
+    si:
+    st_dev = 0
+    st_ino = 0
+    st_mode = 00
+    st_nlink = 0
+    st_uid = 0
+    st_gid = 0
+    st_rdev = 0
+    st_size = 0
+    st_blksize = 0
+    st_blocks = 0
+    st_atime = 0x00000000
+    st_mtime = 0x00000000
+    st_ctime = 0x00000000
+
+bb_opendir(path="/", fi=0x25783c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe20001e40
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1fffec60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x20001b00, filler=0x25f76ce0, offset=0, fi=0x24f82c80)
+    readdir returned 0x0x7fbe20001e70
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x25783c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1fffec60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_opendir(path="/", fi=0x24f82c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe18000cd0
+    fi:
+    flags = 0x00008000
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe18000cd0
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe18000cd0
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x25783c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe20001e40
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_readdir(path="/", buf=0x20001b00, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe20001e70
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1f7fdc90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_opendir(path="/", fi=0x1fffec80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe14000b20
+    fi:
+    flags = 0x00008000
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x24f82c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe14000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe14000b20
+    lock_owner = 0x0000000000000000
+
+bb_opendir(path="/", fi=0x1f7fdc80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe0c000b20
+    fi:
+    flags = 0x00018800
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_readdir(path="/", buf=0x0c000990, filler=0x25f76ce0, offset=0, fi=0x1fffec80)
+    readdir returned 0x0x7fbe0c000b50
+calling filler with name .META
+calling filler with name .
+calling filler with name ..
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe0c000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/.META", statbuf=0x24f82c90)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/.META", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/.META"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073280
+    st_mode = 040775
+    st_nlink = 2
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab92
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_getattr(path="/", statbuf=0x25783c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_releasedir(path="/", fi=0x24f82c90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe0c000b20
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe0c000b20
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x1f7fdc60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_opendir(path="/", fi=0x25783c80)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    opendir returned 0x0x7fbe20001e40
+    fi:
+    flags = 0x00008000
+    fh_old = 0x00000000
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_releasedir(path="/", fi=0x1fffec90)
+    fi:
+    flags = 0x00000000
+    fh_old = 0x7fbe20001e40
+    writepage = 0
+    direct_io = 0
+    keep_cache = 0
+    fh = 0x00007fbe20001e40
+    lock_owner = 0x0000000000000000
+
+bb_getattr(path="/", statbuf=0x24f82c60)
+    bb_fullpath:  rootdir = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir", path = "/", fpath = "/home/rganvir/temp/fuse-tutorial-2016-03-25/example/rootdir/"
+    lstat returned 0
+    si:
+    st_dev = 2054
+    st_ino = 1073279
+    st_mode = 040775
+    st_nlink = 3
+    st_uid = 1000
+    st_gid = 1000
+    st_rdev = 0
+    st_size = 4096
+    st_blksize = 4096
+    st_blocks = 8
+    st_atime = 0x580cab84
+    st_mtime = 0x580cab84
+    st_ctime = 0x580cab84
+
+bb_destroy(userdata=0x0087e020)
