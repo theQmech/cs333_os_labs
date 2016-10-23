@@ -48,11 +48,13 @@
 #define SIZE_HASH 41
 
 void free_inode(struct file_node *fi);
-struct file_node * getfilenode(struct fuse_file_info * fi);
+struct file_node * getfilenode(const char * path);
 int update_inode(const char* path, struct file_node *inode);
 char * get_hash(const char *buf);
 void decr_ref_count(const char *hash);
 void incr_ref_count(const char *hash, const char *buf);
+
+static void bb_fullpath(char fpath[PATH_MAX], const char *path);
 
 void free_inode(struct file_node *fi){
 	for (int i=0; i<fi->n_blocks; ++i){
@@ -65,7 +67,7 @@ void free_inode(struct file_node *fi){
 	free(fi);
 }
 
-struct file_node * getfilenode(struct fuse_file_info * fi){
+struct file_node * getfilenode(const char * path){
 	int status;
 
 	struct file_node * ret = malloc(sizeof(struct file_node));
@@ -73,24 +75,64 @@ struct file_node * getfilenode(struct fuse_file_info * fi){
 	ret->n_blocks = 0;
 	ret->block = NULL;
 
-	status = pread(fi->fh, &ret, sizeof(struct file_cnt), 0);
+	if (path == NULL ){
+		free(ret);
+		return NULL;
+	}
+
+	char realpath[400];
+	bb_fullpath(realpath, path);
+
+	log_msg("#############1\n");
+
+	int fd = open(realpath, O_RDONLY);
+	if (fd == -1){
+		log_error("update_inode: error opening file");
+		free(ret);
+		return NULL;
+	}
+
+	log_msg("#############2\n");
+
+	status = pread(fd, ret, sizeof(struct file_cnt), 0);
 	if (status == -1){
+		log_msg("getfilenode can't read file data: %s\n", realpath);
 		ret->size = 0;
 		ret->n_blocks = 0;
 		free_inode(ret);
+		close(fd);
 		return NULL;
 	}
-	ret->block = malloc(sizeof(char*)*ret->size);
-	for (int i=0; i<ret->size; ++i) ret->block[i] = NULL;
+	log_msg("#############3\n");
 
-	for (int i=0; i<ret->size; ++i){
-		status = pread(fi->fh, ret->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
+	log_msg("size:%d\tn_blocks:%d\n", ret->size, ret->n_blocks);
+
+	log_msg("#############3\n");
+
+
+	if (ret->n_blocks == 0){
+		log_msg("#############7\n");
+		close(fd);
+		return ret;
+	}
+
+	ret->block = malloc(sizeof(char*)*ret->n_blocks);
+	log_msg("#############4\n");
+	for (int i=0; i<ret->n_blocks; ++i) ret->block[i] = NULL;
+
+	log_msg("#############5, n_blocks: %d\t pos:%d\n", ret->n_blocks, sizeof(struct file_cnt));
+	for (int i=0; i<ret->n_blocks; ++i){
+		ret->block[i] = malloc(sizeof(char));
+		status = pread(fd, ret->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
 		if (status == -1){
+			log_error("getfilenode:: error reading block hashes\n");
 			free_inode(ret);
+			close(fd);
 			return NULL;
 		}
 	}
 
+	close(fd);
 	return ret;
 }
 
@@ -99,31 +141,53 @@ int update_inode(const char* path, struct file_node *inode){
 	int ret = 0;
 
 	char realpath[400];
-	sprintf(realpath, "%s/%s", BB_DATA->rootdir, path);
+	bb_fullpath(realpath, path);
 
-	int fd = open(realpath, O_WRONLY);
-	if (fd == -1){
+	// int fd = open(realpath, O_WRONLY);
+	// if (fd == -1){
+	// 	log_error("update_inode: error opening file");
+	// 	return -1;
+	// }
+
+	// int status = pwrite(fd, inode, sizeof(struct file_cnt), 0);
+	// if(status != sizeof(struct file_cnt)){
+	// 	log_error("update_inode, can't write file_cnt\n");
+	// 	close(fd);
+	// 	return -1;
+	// }
+
+	// for (int i=0; i<inode->n_blocks; ++i){
+	// 	status = pwrite(fd, inode->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
+	// 	if (status == -1){
+	// 		log_error("update_inode, can't write block\n");
+	// 		close(fd);
+	// 		return -1;
+	// 	}
+	// }
+
+	FILE * file = fopen(realpath, "w");
+	if (file == NULL){
 		log_error("update_inode: error opening file");
 		return -1;
 	}
 
-	int status = pwrite(fd, inode, sizeof(struct file_cnt), 0);
-	if(status != sizeof(struct file_cnt)){
+	int status = fwrite(inode, sizeof(struct file_cnt), 1, file);
+	if(status <= 0){
 		log_error("update_inode, can't write file_cnt\n");
-		close(fd);
+		fclose(file);
 		return -1;
 	}
 
-	for (int i=0; i<inode->size; ++i){
-		status = pwrite(fd, inode->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
-		if (status == -1){
+	for (int i=0; i<inode->n_blocks; ++i){
+		status = fwrite(inode->block[i], sizeof(char)*SIZE_HASH, 1, file);
+		if (status < 0){
 			log_error("update_inode, can't write block\n");
-			close(fd);
+			fclose(file);
 			return -1;
 		}
 	}
 
-	close(fd);
+	fclose(file);
 	return 0;
 }
 
@@ -148,49 +212,56 @@ void incr_ref_count(const char *hash, const char *buf){
 
 	if(d_fd < 0){
 		// create a file and write buf to it
-		d_fd = open(data_file_path, O_RDWR | O_CREAT);
+		d_fd = open(data_file_path, O_RDWR | O_CREAT, 0664);
 		
-		n = pwrite(d_fd, (void *)buf, sizeof(buf), 0 );
+		n = pwrite(d_fd, (void *)buf, BLOCK_SZ, 0 );
 		
 		if(n < 0){
 			log_msg("incr_ref_count::cannot write to .data .\n");
 			close(d_fd);
 			return;
 		}
+		close(d_fd);
 	}
+	close(d_fd);
 
 	int m_fd = open(meta_file_path, O_RDWR);
 
 	if(m_fd < 0){
 		// create the file and write to it 1
-		m_fd = open(meta_file_path, O_RDWR | O_CREAT);
+		m_fd = open(meta_file_path, O_RDWR | O_CREAT, 0644);
 		count = 1;
-		n = pwrite(d_fd, (void *)count, sizeof(int), 0 );
+		n = pwrite(m_fd, (void *)&count, sizeof(int), 0 );
 		if (n < 0 ){
 			log_msg("incr_ref_count::cannot write to .meta .\n");
 			close(m_fd);
 			return;
 		}
+		close(m_fd);
 	}
 	else{
 
-		n = pread(m_fd, (void *)count, sizeof(int), 0);
+		n = pread(m_fd, (void *)&count, sizeof(int), 0);
 
 		if( n < 0){
 			log_msg("incr_ref_count::Unsuccessful read count\n");
-			return;		
+			close(m_fd);
+			return;
 		}
 
 		count++;
 
-		n = pwrite(m_fd, (void *)count, sizeof(int), 0 );
+		n = pwrite(m_fd, (void *)&count, sizeof(int), 0 );
 
 		if(n < 0){
+			close(m_fd);
 			log_msg("incr_ref_count::Unsuccessful write count \n");
 			return;
 		}
 
 	}
+
+	close(m_fd);
 
 	return;
 
@@ -216,7 +287,7 @@ void decr_ref_count(const char *hash){
 		return;
 	}
 
-	int n = pread(fd, (void *)count, sizeof(int), 0);
+	int n = pread(fd, (void *)&count, sizeof(int), 0);
 
 	if( n < 0){
 		log_msg("decr_ref_count::Unsuccessful read\n");
@@ -225,7 +296,7 @@ void decr_ref_count(const char *hash){
 
 	count--;
 
-	n = pwrite(fd, (void *)count, sizeof(int), 0 );
+	n = pwrite(fd, (void *)&count, sizeof(int), 0 );
 
 	if(n < 0){
 		log_msg("decr_ref_count::Unsuccessful write\n");
@@ -272,10 +343,31 @@ int bb_getattr(const char *path, struct stat *statbuf){
 	  path, statbuf);
 	bb_fullpath(fpath, path);
 
-	retstat = log_syscall("lstat", lstat(fpath, statbuf), 0);
+	log_msg("here!\n");
+
+	int res = lstat(fpath, statbuf);
+	log_msg("here!\n");
+
+	if (res == -1){
+		return -errno;
+	}
+
+	if(S_ISREG(statbuf->st_mode)){
+		log_msg("dsngfdsnfn\n");
+		struct file_node * inode = getfilenode(path);
+		statbuf->st_size = inode->size;
+	}
+
+	log_msg("here!\n");
+
+
+	retstat = log_syscall("lstat", res, 0);
+	log_msg("here!\n");
 	
 	log_stat(statbuf);
-	
+
+	log_msg("here!\n");
+
 	return retstat;
 }
 
@@ -527,7 +619,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 	int retstat = 0;
 	
 	// take fuse_file_info as pointer and returns file_node structure (refer params.h)
-	struct file_node *inode = getfilenode(fi);
+	struct file_node *inode = getfilenode(path);
 	if (inode == NULL){
 		log_msg("bb_read file not found\n");
 		return -1;
@@ -582,10 +674,14 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset, struc
 
 	int retstat = 0;
 
-	struct file_node *inode = getfilenode(fi);
+	struct file_node *inode = getfilenode(path);
 	if (inode == NULL){
 		log_msg("bb_read file not found\n");
 		return -1;
+	}
+
+	if (offset%BLOCK_SZ != 0){
+		log_msg("bb_write: Non multiple offset\n");
 	}
 
 	int block_n = offset/BLOCK_SZ;
@@ -610,12 +706,38 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset, struc
 	}
 	else if (block_n == inode->size){
 		incr_ref_count(hash_str, buf);
+
+		log_msg("bb_write:: Incremented reference count\n");
+
+		log_msg("bb_write:: size:%d\tn_blocks:%d\n", inode->size, inode->n_blocks);
+
 		inode->size += BLOCK_SZ;
 		inode->n_blocks++;
 
-		strcpy(inode->block[block_n], hash_str);
+		log_msg("bb_write:: size:%d\tn_blocks:%d\n", inode->size, inode->n_blocks);
+
+		char ** newblock = malloc(sizeof(char*)*inode->n_blocks);
+		for (int i=0; i<inode->n_blocks-1; ++i){
+			newblock[i] = malloc(sizeof(char)*SIZE_HASH);
+			strcpy(newblock[i], inode->block[i]);
+		}
+		log_msg("###########skjngkjsng: %s %d\n", hash_str, block_n);
+		newblock[block_n] = malloc(sizeof(char)*SIZE_HASH);
+		strcpy(newblock[block_n], hash_str);
+		log_msg("####### allocated\n");	
+
+		for (int i=0; i<inode->n_blocks-1; ++i){
+			free(inode->block[i]);
+		}
+		free(inode->block);
+
+		inode->block = newblock;
+
+		log_msg("bb_write:: in memory inode changed\n");
 
 		update_inode(path, inode);
+		log_msg("bb_write:: memory inode flushed\n");
+
 	}
 	else{
 		retstat = -1;
@@ -692,7 +814,7 @@ int bb_statfs(const char *path, struct statvfs *statv){
 int bb_flush(const char *path, struct fuse_file_info *fi){
 	log_msg("\nbb_flush(path=\"%s\", fi=0x%08x)\n", path, fi);
 	// no need to get fpath on this one, since I work from fi->fh not the path
-	log_fi(fi);
+	log_fi(fi); 
 	
 	return 0;
 }
@@ -881,11 +1003,13 @@ int bb_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset
 	// returns something non-zero.  The first case just means I've
 	// read the whole directory; the second means the buffer is full.
 	do {
-	log_msg("calling filler with name %s\n", de->d_name);
-	if (filler(buf, de->d_name, NULL, 0) != 0) {
-		log_msg("    ERROR bb_readdir filler:  buffer full");
-		return -ENOMEM;
-	}
+		log_msg("calling filler with name %s\n", de->d_name);
+		if (filler(buf, de->d_name, NULL, 0) != 0) {
+			log_msg("#################1\n");
+			log_msg("    ERROR bb_readdir filler:  buffer full");
+			return -ENOMEM;
+		}
+		log_msg("#################2\n");
 	} while ((de = readdir(dp)) != NULL);
 	
 	log_fi(fi);
@@ -1000,7 +1124,7 @@ int bb_access(const char *path, int mask){
 /**
  * Create and open a file
  *
- * If the file does not exist, first create it with the specified
+ * If tbwrecified
  * mode, and then open it.
  *
  * If this method is not implemented or under Linux kernel
@@ -1066,7 +1190,13 @@ int bb_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *f
 	
 	retstat = fstat(fi->fh, statbuf);
 	if (retstat < 0)
-	retstat = log_error("bb_fgetattr fstat");
+		retstat = log_error("bb_fgetattr fstat");
+
+	if(S_ISREG(statbuf->st_mode)){
+		log_msg("dsngfdsnfn\n");
+		struct file_node * inode = getfilenode(path);
+		statbuf->st_size = inode->size;
+	}
 	
 	log_stat(statbuf);
 	
@@ -1183,14 +1313,14 @@ int main(int argc, char *argv[]){
 	// there are enough arguments, and that neither of the last two
 	// start with a hyphen (this will break if you actually have a
 	// rootpoint or mountpoint whose name starts with a hyphen, but so
-	// will a zillion other programs)
+	// will a zillion other programs)	
 	if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
 	bb_usage();
 	
 	char *rootdir = realpath(argv[argc-2], NULL);
 	fprintf(stderr, "Cleaning %s...\n", rootdir);
 	char cmd[100];
-	sprintf(cmd, "rm -rf %s/*", rootdir);
+	sprintf(cmd, "rm -rf %s/* .META", rootdir);
 	int status = system(cmd);
 	fprintf(stderr, "\t Done with exit code %d\n", status);
 	// fprintf(stderr, "Number of files:%d\nNumber of directories:%d\n", filecount(rootdir), dircount(rootdir));
