@@ -21,9 +21,11 @@ Actual contents of `myfile.txt` on disk will be:
 This structure of file will be read up by our filesystem and handled appropriately.
 Directories are stored in usual way
 
-
 * We clean the rootdir upon initialization. to make stuff easier.
 
-* Lets try and use the following code for SHA1 - https://github.com/clibs/sha1
-  Its well documented and will simpplify our work to a great deal.
+TESTING:
+========
 
+We create a random file of size 10 M `head -c 10M </dev/urandom >file`
+Then make 100 copies of the file in the mounted directory(takes some time).
+In our case a `du -sh` of the root dir shows that only 6.6MB was used up.

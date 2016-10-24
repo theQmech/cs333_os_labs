@@ -1,0 +1,3388 @@
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/bbfs.c /home/rganvir/temp/fuse-tutorial-2016-03-25/src/bbfs.c
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/bbfs.c	2016-03-27 06:15:20.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/bbfs.c	2016-10-24 13:04:10.939830279 +0530
+@@ -36,6 +36,7 @@
+ #include <string.h>
+ #include <unistd.h>
+ #include <sys/types.h>
++#include <stdint.h>
+ 
+ #ifdef HAVE_SYS_XATTR_H
+ #include <sys/xattr.h>
+@@ -43,19 +44,314 @@
+ 
+ #include "log.h"
+ 
++#define BLOCK_SZ 4096
++#define SIZE_HASH 41
++
++void free_inode(struct file_node *fi);
++struct file_node * getfilenode(const char * path);
++int update_inode(const char* path, struct file_node *inode);
++char * get_hash(const char *buf);
++void decr_ref_count(const char *hash);
++void incr_ref_count(const char *hash, const char *buf);
++
++static void bb_fullpath(char fpath[PATH_MAX], const char *path);
++
++void free_inode(struct file_node *fi){
++	log_msg("Freeing inode\n");
++
++	if (fi == NULL) return;
++
++	for (int i=0; i<fi->n_blocks; ++i){
++		if (fi->block[i] != NULL){
++			log_msg("Attempting to free %x\t contents: %s\n", fi->block[i], fi->block[i]);
++			free(fi->block[i]);
++			log_msg("Freed %x\n", fi->block[i]);
++		}
++	}
++	if (fi->block != NULL) free(fi->block);
++
++	if (fi != NULL) free(fi);
++	log_msg("Free inode, returing\n");
++}
++
++struct file_node * getfilenode(const char * path){
++	int status;
++
++	struct file_node * ret = malloc(sizeof(struct file_node));
++	ret->size = 0;
++	ret->n_blocks = 0;
++	ret->block = NULL;
++
++	if (path == NULL ){
++		free(ret);
++		return NULL;
++	}
++
++	char realpath[400];
++	bb_fullpath(realpath, path);
++
++	// log_msg("#############1\n");
++
++	int fd = open(realpath, O_RDONLY);
++	if (fd == -1){
++		log_error("update_inode: error opening file");
++		free(ret);
++		return NULL;
++	}
++
++	// log_msg("#############2\n");
++
++	status = pread(fd, ret, sizeof(struct file_cnt), 0);
++	if (status == -1){
++		log_msg("getfilenode can't read file data: %s\n", realpath);
++		ret->size = 0;
++		ret->n_blocks = 0;
++		free_inode(ret);
++		close(fd);
++		return NULL;
++	}
++	// log_msg("#############3\n");
++
++	log_msg("size:%d\tn_blocks:%d\n", ret->size, ret->n_blocks);
++
++	// log_msg("#############3\n");
++
++
++	if (ret->n_blocks == 0){
++		log_msg("#############7\n");
++		close(fd);
++		return ret;
++	}
++
++	ret->block = malloc(sizeof(char*)*ret->n_blocks);
++	// log_msg("#############4\n");
++	for (int i=0; i<ret->n_blocks; ++i) ret->block[i] = NULL;
++
++	// log_msg("#############5, n_blocks: %d\t pos:%d\n", ret->n_blocks, sizeof(struct file_cnt));
++	for (int i=0; i<ret->n_blocks; ++i){
++		ret->block[i] = malloc(sizeof(char)*SIZE_HASH);
++		status = pread(fd, ret->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
++		if (status == -1){
++			log_error("getfilenode:: error reading block hashes\n");
++			free_inode(ret);
++			close(fd);
++			return NULL;
++		}
++	}
++
++	close(fd);
++	return ret;
++}
++
++int update_inode(const char* path, struct file_node *inode){
++	log_msg("update_inode: %s\n", path);
++
++	if (path == NULL || inode == NULL) return -1;
++	int ret = 0;
++
++	char realpath[400];
++	bb_fullpath(realpath, path);
++
++	// int fd = open(realpath, O_WRONLY);
++	// if (fd == -1){
++	// 	log_error("update_inode: error opening file");
++	// 	return -1;
++	// }
++
++	// int status = pwrite(fd, inode, sizeof(struct file_cnt), 0);
++	// if(status != sizeof(struct file_cnt)){
++	// 	log_error("update_inode, can't write file_cnt\n");
++	// 	close(fd);
++	// 	return -1;
++	// }
++
++	// for (int i=0; i<inode->n_blocks; ++i){
++	// 	status = pwrite(fd, inode->block[i], SIZE_HASH*sizeof(char), sizeof(struct file_cnt) + i*SIZE_HASH*sizeof(char));
++	// 	if (status == -1){
++	// 		log_error("update_inode, can't write block\n");
++	// 		close(fd);
++	// 		return -1;
++	// 	}
++	// }
++
++	int fd = open(realpath, O_WRONLY);
++	if (fd < 0){
++		log_error("update_inode: error opening file");
++		return -1;
++	}
++
++	int status = pwrite(fd, inode, sizeof(struct file_cnt), 0);
++	if(status <= 0){
++		log_error("update_inode, can't write file_cnt\n");
++		close(fd);
++		return -1;
++	}
++	log_msg("update_inode: updated header, %dB written\n", status);
++
++	for (int i=0; i<inode->n_blocks; ++i){
++		status = pwrite(fd, inode->block[i], sizeof(char)*SIZE_HASH, sizeof(struct file_cnt)+i*sizeof(char)*SIZE_HASH);
++		if (status < 0){
++			log_error("update_inode, can't write block\n");
++			close(fd);
++			return -errno;
++		}
++		log_msg("update_inode: updated block %i, %dB written\n", i, status);
++	}
++	log_msg("update_inode: here\n");
++
++	close(fd);
++	// status = log_syscall("update_inode", fclose(file), 123);
++	if (status < 0){
++		log_error("update_inode: error closing file\n");
++	}
++
++	log_msg("update_inode: %s\n", path);
++	log_msg("size:%d\n", inode->size);
++	log_msg("n_blocks:%d\n", inode->n_blocks);
++	for(int i=0; i<inode->n_blocks; ++i){
++		log_msg("block %d: %s\n", i, inode->block[i]);
++	}
++
++	log_msg("update_inode: inode updated, Returning\n");
++	return 0;
++}
++
++// increment ref count 
++// check if hash.meta file exists
++// if not
++//			create two files 
++//					h.data . Write into it actual content
++//					h.meta . Write into it ref count
++// if present
++//			update the ref count of h.meta 
++void incr_ref_count(const char *hash, const char *buf){
++	log_msg("Entering incr_ref_count\n");
++
++	char meta_file_path[200], data_file_path[200];
++	sprintf(meta_file_path, "%s/.META/%s.meta", BB_DATA->rootdir, hash);
++	sprintf(data_file_path, "%s/.META/%s.data", BB_DATA->rootdir, hash);
++
++	// check if both file exists
++	int n; // always to check count of read or written
++	int count;
++	int d_fd = open(data_file_path, O_RDWR);
++
++	if(d_fd < 0){
++		// create a file and write buf to it
++		d_fd = open(data_file_path, O_RDWR | O_CREAT, 0664);
++		
++		n = pwrite(d_fd, (void *)buf, BLOCK_SZ, 0 );
++		
++		if(n < 0){
++			log_msg("incr_ref_count::cannot write to .data .\n");
++			close(d_fd);
++			return;
++		}
++		close(d_fd);
++	}
++	close(d_fd);
++
++	int m_fd = open(meta_file_path, O_RDWR);
++
++	if(m_fd < 0){
++		// create the file and write to it 1
++		m_fd = open(meta_file_path, O_RDWR | O_CREAT, 0644);
++		count = 1;
++		n = pwrite(m_fd, (void *)&count, sizeof(int), 0 );
++		if (n < 0 ){
++			log_msg("incr_ref_count::cannot write to .meta .\n");
++			close(m_fd);
++			return;
++		}
++		close(m_fd);
++	}
++	else{
++
++		n = pread(m_fd, (void *)&count, sizeof(int), 0);
++
++		if( n < 0){
++			log_msg("incr_ref_count::Unsuccessful read count\n");
++			close(m_fd);
++			return;
++		}
++
++		count++;
++
++		n = pwrite(m_fd, (void *)&count, sizeof(int), 0 );
++
++		if(n < 0){
++			close(m_fd);
++			log_msg("incr_ref_count::Unsuccessful write count \n");
++			return;
++		}
++
++	}
++
++	close(m_fd);
++
++	log_msg("Returning from incr_ref_count\n");
++
++	return;
++
++}
++
++
++
++// decrement ref count
++// open h.meta . Decrease the ref count by one 
++
++void decr_ref_count(const char *hash){
++	log_msg("Entering decr_ref_count\n");
++
++	//open file corresponding to hash
++	char meta_file_path[200];
++	sprintf(meta_file_path, "%s/.META/%s.meta", BB_DATA->rootdir, hash);
++
++	int count;
++	//read from block and close
++	int fd = open(meta_file_path, O_RDWR);
++
++	if (fd < 0 ){
++		log_msg("decr_ref_count::file does not exists .\n");
++		return;
++	}
++
++	int n = pread(fd, (void *)&count, sizeof(int), 0);
++
++	if( n < 0){
++		log_msg("decr_ref_count::Unsuccessful read\n");
++		return;		
++	}
++
++	count--;
++
++	n = pwrite(fd, (void *)&count, sizeof(int), 0 );
++
++	if(n < 0){
++		log_msg("decr_ref_count::Unsuccessful write\n");
++		return;
++	}
++
++	//close fd
++	close(fd);
++	log_msg("Returning from decr_ref_count\n");
++
++
++}
++
++
+ //  All the paths I see are relative to the root of the mounted
+ //  filesystem.  In order to get to the underlying filesystem, I need to
+ //  have the mountpoint.  I'll save it away early on in main(), and then
+ //  whenever I need a path for something I'll call this to construct
+ //  it.
+-static void bb_fullpath(char fpath[PATH_MAX], const char *path)
+-{
+-    strcpy(fpath, BB_DATA->rootdir);
+-    strncat(fpath, path, PATH_MAX); // ridiculously long paths will
+-				    // break here
++static void bb_fullpath(char fpath[PATH_MAX], const char *path){
++	strcpy(fpath, BB_DATA->rootdir);
++	strncat(fpath, path, PATH_MAX); // ridiculously long paths will
++					// break here
+ 
+-    log_msg("    bb_fullpath:  rootdir = \"%s\", path = \"%s\", fpath = \"%s\"\n",
+-	    BB_DATA->rootdir, path, fpath);
++	log_msg("    bb_fullpath:  rootdir = \"%s\", path = \"%s\", fpath = \"%s\"\n",
++		BB_DATA->rootdir, path, fpath);
+ }
+ 
+ ///////////////////////////////////////////////////////////
+@@ -69,20 +365,40 @@
+  * ignored.  The 'st_ino' field is ignored except if the 'use_ino'
+  * mount option is given.
+  */
+-int bb_getattr(const char *path, struct stat *statbuf)
+-{
+-    int retstat;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_getattr(path=\"%s\", statbuf=0x%08x)\n",
++int bb_getattr(const char *path, struct stat *statbuf){
++	int retstat;
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_getattr(path=\"%s\", statbuf=0x%08x)\n",
+ 	  path, statbuf);
+-    bb_fullpath(fpath, path);
++	bb_fullpath(fpath, path);
++
++	// log_msg("here!\n");
++
++	int res = lstat(fpath, statbuf);
++	// log_msg("here!\n");
++
++	if (res == -1){
++		return -errno;
++	}
++
++	if(S_ISREG(statbuf->st_mode)){
++		// log_msg("dsngfdsnfn\n");
++		struct file_node * inode = getfilenode(path);
++		statbuf->st_size = inode->size;
++	}
++
++	// log_msg("here!\n");
++
++
++	retstat = log_syscall("lstat", res, 0);
++	// log_msg("here!\n");
++	
++	log_stat(statbuf);
++
++	// log_msg("here!\n");
+ 
+-    retstat = log_syscall("lstat", lstat(fpath, statbuf), 0);
+-    
+-    log_stat(statbuf);
+-    
+-    return retstat;
++	return retstat;
+ }
+ 
+ /** Read the target of a symbolic link
+@@ -97,22 +413,21 @@
+ // null.  So, the size passed to to the system readlink() must be one
+ // less than the size passed to bb_readlink()
+ // bb_readlink() code by Bernardo F Costa (thanks!)
+-int bb_readlink(const char *path, char *link, size_t size)
+-{
+-    int retstat;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("bb_readlink(path=\"%s\", link=\"%s\", size=%d)\n",
++int bb_readlink(const char *path, char *link, size_t size){
++	int retstat;
++	char fpath[PATH_MAX];
++	
++	log_msg("bb_readlink(path=\"%s\", link=\"%s\", size=%d)\n",
+ 	  path, link, size);
+-    bb_fullpath(fpath, path);
++	bb_fullpath(fpath, path);
+ 
+-    retstat = log_syscall("fpath", readlink(fpath, link, size - 1), 0);
+-    if (retstat >= 0) {
++	retstat = log_syscall("fpath", readlink(fpath, link, size - 1), 0);
++	if (retstat >= 0) {
+ 	link[retstat] = '\0';
+ 	retstat = 0;
+-    }
+-    
+-    return retstat;
++	}
++	
++	return retstat;
+ }
+ 
+ /** Create a file node
+@@ -121,67 +436,78 @@
+  * creation of all non-directory, non-symlink nodes.
+  */
+ // shouldn't that comment be "if" there is no.... ?
+-int bb_mknod(const char *path, mode_t mode, dev_t dev)
+-{
+-    int retstat;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_mknod(path=\"%s\", mode=0%3o, dev=%lld)\n",
++int bb_mknod(const char *path, mode_t mode, dev_t dev){
++	int retstat;
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_mknod(path=\"%s\", mode=0%3o, dev=%lld)\n",
+ 	  path, mode, dev);
+-    bb_fullpath(fpath, path);
+-    
+-    // On Linux this could just be 'mknod(path, mode, dev)' but this
+-    // tries to be be more portable by honoring the quote in the Linux
+-    // mknod man page stating the only portable use of mknod() is to
+-    // make a fifo, but saying it should never actually be used for
+-    // that.
+-    if (S_ISREG(mode)) {
+-	retstat = log_syscall("open", open(fpath, O_CREAT | O_EXCL | O_WRONLY, mode), 0);
+-	if (retstat >= 0)
+-	    retstat = log_syscall("close", close(retstat), 0);
+-    } else
+-	if (S_ISFIFO(mode))
+-	    retstat = log_syscall("mkfifo", mkfifo(fpath, mode), 0);
+-	else
+-	    retstat = log_syscall("mknod", mknod(fpath, mode, dev), 0);
+-    
+-    return retstat;
++	bb_fullpath(fpath, path);
++	
++	// On Linux this could just be 'mknod(path, mode, dev)' but this
++	// tries to be be more portable by honoring the quote in the Linux
++	// mknod man page stating the only portable use of mknod() is to
++	// make a fifo, but saying it should never actually be used for
++	// that.
++	if (S_ISREG(mode)) {
++		retstat = log_syscall("open", open(fpath, O_CREAT | O_EXCL | O_WRONLY, mode), 0);
++		if (retstat >= 0){
++			retstat = log_syscall("close", close(retstat), 0);
++			struct stat st;
++			stat(fpath, &st);
++			int size = st.st_size;
++			if (size == 0){
++				log_msg("mknod, initializing file\n");
++				struct file_cnt * temp = malloc(sizeof(struct file_cnt));
++				temp->n_blocks = 0;
++				temp->size = 0;
++				FILE *file= fopen(fpath, "wb");
++				fwrite(temp, sizeof(struct file_cnt), 1, file);
++				fclose(file);
++			}
++		}
++	} 
++	else{
++		if (S_ISFIFO(mode))
++			retstat = log_syscall("mkfifo", mkfifo(fpath, mode), 0);
++		else
++			retstat = log_syscall("mknod", mknod(fpath, mode, dev), 0);
++	}
++
++	return retstat;
+ }
+ 
+ /** Create a directory */
+-int bb_mkdir(const char *path, mode_t mode)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_mkdir(path=\"%s\", mode=0%3o)\n",
+-	    path, mode);
+-    bb_fullpath(fpath, path);
++int bb_mkdir(const char *path, mode_t mode){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_mkdir(path=\"%s\", mode=0%3o)\n",
++		path, mode);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("mkdir", mkdir(fpath, mode), 0);
++	return log_syscall("mkdir", mkdir(fpath, mode), 0);
+ }
+ 
+ /** Remove a file */
+-int bb_unlink(const char *path)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("bb_unlink(path=\"%s\")\n",
+-	    path);
+-    bb_fullpath(fpath, path);
++int bb_unlink(const char *path){
++	char fpath[PATH_MAX];
++	
++	log_msg("bb_unlink(path=\"%s\")\n",
++		path);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("unlink", unlink(fpath), 0);
++	return log_syscall("unlink", unlink(fpath), 0);
+ }
+ 
+ /** Remove a directory */
+-int bb_rmdir(const char *path)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("bb_rmdir(path=\"%s\")\n",
+-	    path);
+-    bb_fullpath(fpath, path);
++int bb_rmdir(const char *path){
++	char fpath[PATH_MAX];
++	
++	log_msg("bb_rmdir(path=\"%s\")\n",
++		path);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("rmdir", rmdir(fpath), 0);
++	return log_syscall("rmdir", rmdir(fpath), 0);
+ }
+ 
+ /** Create a symbolic link */
+@@ -189,93 +515,85 @@
+ // to the symlink() system call.  The 'path' is where the link points,
+ // while the 'link' is the link itself.  So we need to leave the path
+ // unaltered, but insert the link into the mounted directory.
+-int bb_symlink(const char *path, const char *link)
+-{
+-    char flink[PATH_MAX];
+-    
+-    log_msg("\nbb_symlink(path=\"%s\", link=\"%s\")\n",
+-	    path, link);
+-    bb_fullpath(flink, link);
++int bb_symlink(const char *path, const char *link){
++	char flink[PATH_MAX];
++	
++	log_msg("\nbb_symlink(path=\"%s\", link=\"%s\")\n",
++		path, link);
++	bb_fullpath(flink, link);
+ 
+-    return log_syscall("symlink", symlink(path, flink), 0);
++	return log_syscall("symlink", symlink(path, flink), 0);
+ }
+ 
+ /** Rename a file */
+ // both path and newpath are fs-relative
+-int bb_rename(const char *path, const char *newpath)
+-{
+-    char fpath[PATH_MAX];
+-    char fnewpath[PATH_MAX];
+-    
+-    log_msg("\nbb_rename(fpath=\"%s\", newpath=\"%s\")\n",
+-	    path, newpath);
+-    bb_fullpath(fpath, path);
+-    bb_fullpath(fnewpath, newpath);
++int bb_rename(const char *path, const char *newpath){
++	char fpath[PATH_MAX];
++	char fnewpath[PATH_MAX];
++	
++	log_msg("\nbb_rename(fpath=\"%s\", newpath=\"%s\")\n",
++		path, newpath);
++	bb_fullpath(fpath, path);
++	bb_fullpath(fnewpath, newpath);
+ 
+-    return log_syscall("rename", rename(fpath, fnewpath), 0);
++	return log_syscall("rename", rename(fpath, fnewpath), 0);
+ }
+ 
+ /** Create a hard link to a file */
+-int bb_link(const char *path, const char *newpath)
+-{
+-    char fpath[PATH_MAX], fnewpath[PATH_MAX];
+-    
+-    log_msg("\nbb_link(path=\"%s\", newpath=\"%s\")\n",
+-	    path, newpath);
+-    bb_fullpath(fpath, path);
+-    bb_fullpath(fnewpath, newpath);
++int bb_link(const char *path, const char *newpath){
++	char fpath[PATH_MAX], fnewpath[PATH_MAX];
++	
++	log_msg("\nbb_link(path=\"%s\", newpath=\"%s\")\n",
++		path, newpath);
++	bb_fullpath(fpath, path);
++	bb_fullpath(fnewpath, newpath);
+ 
+-    return log_syscall("link", link(fpath, fnewpath), 0);
++	return log_syscall("link", link(fpath, fnewpath), 0);
+ }
+ 
+ /** Change the permission bits of a file */
+-int bb_chmod(const char *path, mode_t mode)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_chmod(fpath=\"%s\", mode=0%03o)\n",
+-	    path, mode);
+-    bb_fullpath(fpath, path);
++int bb_chmod(const char *path, mode_t mode){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_chmod(fpath=\"%s\", mode=0%03o)\n",
++		path, mode);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("chmod", chmod(fpath, mode), 0);
++	return log_syscall("chmod", chmod(fpath, mode), 0);
+ }
+ 
+ /** Change the owner and group of a file */
+-int bb_chown(const char *path, uid_t uid, gid_t gid)
+-  
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_chown(path=\"%s\", uid=%d, gid=%d)\n",
+-	    path, uid, gid);
+-    bb_fullpath(fpath, path);
++int bb_chown(const char *path, uid_t uid, gid_t gid){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_chown(path=\"%s\", uid=%d, gid=%d)\n",
++		path, uid, gid);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("chown", chown(fpath, uid, gid), 0);
++	return log_syscall("chown", chown(fpath, uid, gid), 0);
+ }
+ 
+ /** Change the size of a file */
+-int bb_truncate(const char *path, off_t newsize)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_truncate(path=\"%s\", newsize=%lld)\n",
+-	    path, newsize);
+-    bb_fullpath(fpath, path);
++int bb_truncate(const char *path, off_t newsize){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_truncate(path=\"%s\", newsize=%lld)\n",
++		path, newsize);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("truncate", truncate(fpath, newsize), 0);
++	return log_syscall("truncate", truncate(fpath, newsize), 0);
+ }
+ 
+ /** Change the access and/or modification times of a file */
+ /* note -- I'll want to change this as soon as 2.6 is in debian testing */
+-int bb_utime(const char *path, struct utimbuf *ubuf)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_utime(path=\"%s\", ubuf=0x%08x)\n",
+-	    path, ubuf);
+-    bb_fullpath(fpath, path);
++int bb_utime(const char *path, struct utimbuf *ubuf){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_utime(path=\"%s\", ubuf=0x%08x)\n",
++		path, ubuf);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("utime", utime(fpath, ubuf), 0);
++	return log_syscall("utime", utime(fpath, ubuf), 0);
+ }
+ 
+ /** File open operation
+@@ -288,28 +606,27 @@
+  *
+  * Changed in version 2.2
+  */
+-int bb_open(const char *path, struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    int fd;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_open(path\"%s\", fi=0x%08x)\n",
+-	    path, fi);
+-    bb_fullpath(fpath, path);
+-
+-    // if the open call succeeds, my retstat is the file descriptor,
+-    // else it's -errno.  I'm making sure that in that case the saved
+-    // file descriptor is exactly -1.
+-    fd = log_syscall("open", open(fpath, fi->flags), 0);
+-    if (fd < 0)
++int bb_open(const char *path, struct fuse_file_info *fi){
++	int retstat = 0;
++	int fd;
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_open(path\"%s\", fi=0x%08x)\n",
++		path, fi);
++	bb_fullpath(fpath, path);
++
++	// if the open call succeeds, my retstat is the file descriptor,
++	// else it's -errno.  I'm making sure that in that case the saved
++	// file descriptor is exactly -1.
++	fd = log_syscall("open", open(fpath, fi->flags), 0);
++	if (fd < 0)
+ 	retstat = log_error("open");
+ 	
+-    fi->fh = fd;
++	fi->fh = fd;
+ 
+-    log_fi(fi);
+-    
+-    return retstat;
++	log_fi(fi);
++	
++	return retstat;
+ }
+ 
+ /** Read data from an open file
+@@ -328,16 +645,48 @@
+ // can return with anything up to the amount of data requested. nor
+ // with the fusexmp code which returns the amount of data also
+ // returned by read.
+-int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    
+-    log_msg("\nbb_read(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
+-	    path, buf, size, offset, fi);
+-    // no need to get fpath on this one, since I work from fi->fh not the path
+-    log_fi(fi);
++int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi){
++	int retstat = 0;
++	
++	// take fuse_file_info as pointer and returns file_node structure (refer params.h)
++	struct file_node *inode = getfilenode(path);
++	if (inode == NULL){
++		log_msg("bb_read file not found\n");
++		return -1;
++	}
++
++	int block_n = offset/BLOCK_SZ;
++
++
++	if (inode->size < offset || block_n >= inode->n_blocks){
++		log_msg("bb_read out of bounds read\n");
++		return -1;
++	}
++
++	//open file corresponding to hash
++	char block_file_path[200];
++	sprintf(block_file_path, "%s/.META/%s.data", BB_DATA->rootdir, inode->block[block_n]);
++	FILE *block_file = fopen(block_file_path, "r");
++
++	//read from block and close
++	int st = fread((void *)buf, sizeof(char), BLOCK_SZ, block_file);
++	fclose(block_file);
++	free_inode(inode);
+ 
+-    return log_syscall("pread", pread(fi->fh, buf, size, offset), 0);
++	if (st != BLOCK_SZ){
++
++		log_msg("bb_read Unsuccessful read\n");
++	}
++	else {
++		log_msg("\nbb_read(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
++			path, buf, size, offset, fi);
++		// no need to get fpath on this one, since I work from fi->fh not the path
++		log_fi(fi);
++
++		return 0;
++	}
++	
++	// return log_syscall("pread", pread(fi->fh, buf, size, offset), 0);
+ }
+ 
+ /** Write data to an open file
+@@ -350,18 +699,173 @@
+  */
+ // As  with read(), the documentation above is inconsistent with the
+ // documentation for the write() system call.
+-int bb_write(const char *path, const char *buf, size_t size, off_t offset,
+-	     struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    
+-    log_msg("\nbb_write(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
+-	    path, buf, size, offset, fi
+-	    );
+-    // no need to get fpath on this one, since I work from fi->fh not the path
+-    log_fi(fi);
++int bb_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi){
++	// assume size = BLOCK_SZ and offset is a multiple of BLOCK_SZ
++
++	int retstat = 0;
++
++	struct file_node *inode = getfilenode(path);
++	if (inode == NULL){
++		log_msg("bb_read file not found\n");
++		return -1;
++	}
++
++	if (offset%BLOCK_SZ != 0 || size%BLOCK_SZ != 0){
++		log_msg("bb_write: Non multiple offset\n");
++	}
++
++	char mybuf[BLOCK_SZ];
++	char *hash_str;
++
++	log_msg("bb_write: orign_size:%d\toffset:%d\tsize:%d\n", inode->size, offset, size);
++	int newsize = (inode->size > offset + size)? inode->size : (offset+size);
++	log_msg("bb_write: new size: %d\n", newsize);
++
++	char **newblock = malloc(sizeof(char*)*(newsize/BLOCK_SZ));
++
++	int st_block = offset/BLOCK_SZ;
++	int end_block = (offset+size)/BLOCK_SZ;
++
++	for (int i=0; i<newsize/BLOCK_SZ; ++i){
++		log_msg("bb_write: block %d\n", i);
++
++		if (st_block <= i && i < end_block){
++			log_msg("bb_write: modifying block %d\n", i);
++			memcpy(mybuf, buf+ (i-st_block)*BLOCK_SZ, BLOCK_SZ);
++			hash_str = get_hash(mybuf);
++
++			log_msg("hash_str is %s, %0x\n", hash_str, hash_str);
++
++			if (i<inode->n_blocks){
++				decr_ref_count(inode->block[i]);
++			}
++
++			incr_ref_count(hash_str, mybuf);
++			log_msg("here\n");
++
++			newblock[i] = hash_str;
++			log_msg("hash_str copied\n");
++
++			// free(hash_str);
++			log_msg("yaha hoon main\n");
++		}
++		else{
++			newblock[i] = malloc(sizeof(char*)*SIZE_HASH);
++			log_msg("bb_write: copying block %d %s\n", i, inode->block[i]);
++			newblock[i] = memcpy(newblock[i], inode->block[i], SIZE_HASH);
++			log_msg("copied### \n%s", newblock[i]);
++		}
++	}
++	log_msg("bb_write: Actual data wriiten, modifying inodes\n");
++
++	for(int i=0; i<inode->n_blocks; ++i){
++		if (inode->block[i]){
++			free(inode->block[i]);
++			log_msg("Free ** %x\n", inode->block[i]);
++		}
++	} 
++	log_msg("###1\n");
++	if (inode->block) {
++		free(inode->block);
++		log_msg("Free ** %x\n", inode->block);
++	}
++
++	inode->size = newsize;
++	inode->n_blocks = newsize/BLOCK_SZ;
++	inode->block = newblock;
++	log_msg("new inode: size:%d, n_blocks:%d\n", inode->size, inode->n_blocks);
++
++	update_inode(path, inode);
++	log_msg("###3\n");
++	log_msg("bb_write: inode updated\n");
++
++	free_inode(inode);
+ 
+-    return log_syscall("pwrite", pwrite(fi->fh, buf, size, offset), 0);
++	log_msg("bb_write: %d bytes written, returing from bb_write\n", size);
++	return size;
++
++	// int block_n = offset/BLOCK_SZ;
++
++	// // if (inode->size < offset || block_n >= inode->n_blocks){
++	// // 	log_msg("bb_read out of bounds read\n");
++	// // 	return -1;
++	// // }
++
++	// char *hash_str = get_hash(buf);
++
++	// if (hash_str == NULL){
++	// 	retstat = -1;
++	// }
++	// else if (block_n < inode->n_blocks){
++	// 	decr_ref_count(inode->block[block_n]);
++	// 	incr_ref_count(hash_str, buf);
++
++	// 	strcpy(inode->block[block_n], hash_str);
++
++	// 	update_inode(path, inode);
++
++	// 	retstat = BLOCK_SZ;
++	// }
++	// else if (block_n == inode->size){
++	// 	incr_ref_count(hash_str, buf);
++
++	// 	log_msg("bb_write:: Incremented reference count\n");
++
++	// 	log_msg("bb_write:: size:%d\tn_blocks:%d\n", inode->size, inode->n_blocks);
++
++	// 	inode->size += BLOCK_SZ;
++	// 	inode->n_blocks++;
++
++	// 	log_msg("bb_write:: size:%d\tn_blocks:%d\n", inode->size, inode->n_blocks);
++
++	// 	char ** newblock = malloc(sizeof(char*)*inode->n_blocks);
++	// 	for (int i=0; i<inode->n_blocks-1; ++i){
++	// 		newblock[i] = malloc(sizeof(char)*SIZE_HASH);
++	// 		strcpy(newblock[i], inode->block[i]);
++	// 	}
++	// 	log_msg("###########skjngkjsng: %s %d\n", hash_str, block_n);
++	// 	newblock[block_n] = malloc(sizeof(char)*SIZE_HASH);
++	// 	strcpy(newblock[block_n], hash_str);
++	// 	log_msg("####### allocated\n");	
++
++	// 	for (int i=0; i<inode->n_blocks-1; ++i){
++	// 		free(inode->block[i]);
++	// 	}
++	// 	free(inode->block);
++
++	// 	inode->block = newblock;
++
++	// 	log_msg("bb_write:: in memory inode changed\n");
++
++	// 	update_inode(path, inode);
++	// 	log_msg("bb_write:: memory inode flushed\n");
++
++	// 	retstat = BLOCK_SZ;
++
++	// }
++	// else{
++	// 	retstat = -1;
++	// }
++
++	// free_inode(inode);
++
++	return retstat;
++
++
++	//calculate hash of buffer
++
++	//check if hash exists
++	//if so appropriately change block change block 
++
++	//else create block and add block entry
++
++	// log_msg("\nbb_write(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
++	// 	path, buf, size, offset, fi
++	// 	);
++	// // no need to get fpath on this one, since I work from fi->fh not the path
++	// log_fi(fi);
++
++	// return log_syscall("pwrite", pwrite(fi->fh, buf, size, offset), 0);
+ }
+ 
+ /** Get file system statistics
+@@ -371,21 +875,20 @@
+  * Replaced 'struct statfs' parameter with 'struct statvfs' in
+  * version 2.5
+  */
+-int bb_statfs(const char *path, struct statvfs *statv)
+-{
+-    int retstat = 0;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_statfs(path=\"%s\", statv=0x%08x)\n",
+-	    path, statv);
+-    bb_fullpath(fpath, path);
+-    
+-    // get stats for underlying filesystem
+-    retstat = log_syscall("statvfs", statvfs(fpath, statv), 0);
+-    
+-    log_statvfs(statv);
+-    
+-    return retstat;
++int bb_statfs(const char *path, struct statvfs *statv){
++	int retstat = 0;
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_statfs(path=\"%s\", statv=0x%08x)\n",
++		path, statv);
++	bb_fullpath(fpath, path);
++	
++	// get stats for underlying filesystem
++	retstat = log_syscall("statvfs", statvfs(fpath, statv), 0);
++	
++	log_statvfs(statv);
++	
++	return retstat;
+ }
+ 
+ /** Possibly flush cached data
+@@ -412,13 +915,12 @@
+  * Changed in version 2.2
+  */
+ // this is a no-op in BBFS.  It just logs the call and returns success
+-int bb_flush(const char *path, struct fuse_file_info *fi)
+-{
+-    log_msg("\nbb_flush(path=\"%s\", fi=0x%08x)\n", path, fi);
+-    // no need to get fpath on this one, since I work from fi->fh not the path
+-    log_fi(fi);
++int bb_flush(const char *path, struct fuse_file_info *fi){
++	log_msg("\nbb_flush(path=\"%s\", fi=0x%08x)\n", path, fi);
++	// no need to get fpath on this one, since I work from fi->fh not the path
++	log_fi(fi); 
+ 	
+-    return 0;
++	return 0;
+ }
+ 
+ /** Release an open file
+@@ -435,15 +937,14 @@
+  *
+  * Changed in version 2.2
+  */
+-int bb_release(const char *path, struct fuse_file_info *fi)
+-{
+-    log_msg("\nbb_release(path=\"%s\", fi=0x%08x)\n",
+-	  path, fi);
+-    log_fi(fi);
+-
+-    // We need to close the file.  Had we allocated any resources
+-    // (buffers etc) we'd need to free them here as well.
+-    return log_syscall("close", close(fi->fh), 0);
++int bb_release(const char *path, struct fuse_file_info *fi){
++	log_msg("\nbb_release(path=\"%s\", fi=0x%08x)\n",
++		path, fi);
++	log_fi(fi);
++
++	// We need to close the file.  Had we allocated any resources
++	// (buffers etc) we'd need to free them here as well.
++	return log_syscall("close", close(fi->fh), 0);
+ }
+ 
+ /** Synchronize file contents
+@@ -453,83 +954,78 @@
+  *
+  * Changed in version 2.2
+  */
+-int bb_fsync(const char *path, int datasync, struct fuse_file_info *fi)
+-{
+-    log_msg("\nbb_fsync(path=\"%s\", datasync=%d, fi=0x%08x)\n",
+-	    path, datasync, fi);
+-    log_fi(fi);
+-    
+-    // some unix-like systems (notably freebsd) don't have a datasync call
+-#ifdef HAVE_FDATASYNC
+-    if (datasync)
+-	return log_syscall("fdatasync", fdatasync(fi->fh), 0);
+-    else
+-#endif	
++int bb_fsync(const char *path, int datasync, struct fuse_file_info *fi){
++	log_msg("\nbb_fsync(path=\"%s\", datasync=%d, fi=0x%08x)\n",
++		path, datasync, fi);
++	log_fi(fi);
++	
++	// some unix-like systems (notably freebsd) don't have a datasync call
++	#ifdef HAVE_FDATASYNC
++		if (datasync)
++		return log_syscall("fdatasync", fdatasync(fi->fh), 0);
++		else
++	#endif
+ 	return log_syscall("fsync", fsync(fi->fh), 0);
+ }
+ 
+ #ifdef HAVE_SYS_XATTR_H
+ /** Set extended attributes */
+-int bb_setxattr(const char *path, const char *name, const char *value, size_t size, int flags)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_setxattr(path=\"%s\", name=\"%s\", value=\"%s\", size=%d, flags=0x%08x)\n",
+-	    path, name, value, size, flags);
+-    bb_fullpath(fpath, path);
++int bb_setxattr(const char *path, const char *name, const char *value, size_t size, int flags){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_setxattr(path=\"%s\", name=\"%s\", value=\"%s\", size=%d, flags=0x%08x)\n",
++		path, name, value, size, flags);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("lsetxattr", lsetxattr(fpath, name, value, size, flags), 0);
++	return log_syscall("lsetxattr", lsetxattr(fpath, name, value, size, flags), 0);
+ }
+ 
+ /** Get extended attributes */
+-int bb_getxattr(const char *path, const char *name, char *value, size_t size)
+-{
+-    int retstat = 0;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_getxattr(path = \"%s\", name = \"%s\", value = 0x%08x, size = %d)\n",
+-	    path, name, value, size);
+-    bb_fullpath(fpath, path);
++int bb_getxattr(const char *path, const char *name, char *value, size_t size){
++	int retstat = 0;
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_getxattr(path = \"%s\", name = \"%s\", value = 0x%08x, size = %d)\n",
++		path, name, value, size);
++	bb_fullpath(fpath, path);
+ 
+-    retstat = log_syscall("lgetxattr", lgetxattr(fpath, name, value, size), 0);
+-    if (retstat >= 0)
++	retstat = log_syscall("lgetxattr", lgetxattr(fpath, name, value, size), 0);
++	if (retstat >= 0)
+ 	log_msg("    value = \"%s\"\n", value);
+-    
+-    return retstat;
++	
++	return retstat;
+ }
+ 
+ /** List extended attributes */
+-int bb_listxattr(const char *path, char *list, size_t size)
+-{
+-    int retstat = 0;
+-    char fpath[PATH_MAX];
+-    char *ptr;
+-    
+-    log_msg("bb_listxattr(path=\"%s\", list=0x%08x, size=%d)\n",
+-	    path, list, size
+-	    );
+-    bb_fullpath(fpath, path);
++int bb_listxattr(const char *path, char *list, size_t size){
++	int retstat = 0;
++	char fpath[PATH_MAX];
++	char *ptr;
++	
++	log_msg("bb_listxattr(path=\"%s\", list=0x%08x, size=%d)\n",
++		path, list, size
++		);
++	bb_fullpath(fpath, path);
+ 
+-    retstat = log_syscall("llistxattr", llistxattr(fpath, list, size), 0);
+-    if (retstat >= 0) {
++	retstat = log_syscall("llistxattr", llistxattr(fpath, list, size), 0);
++	if (retstat >= 0) {
+ 	log_msg("    returned attributes (length %d):\n", retstat);
+ 	for (ptr = list; ptr < list + retstat; ptr += strlen(ptr)+1)
+-	    log_msg("    \"%s\"\n", ptr);
+-    }
+-    
+-    return retstat;
++		log_msg("    \"%s\"\n", ptr);
++	}
++	
++	return retstat;
+ }
+ 
+ /** Remove extended attributes */
+-int bb_removexattr(const char *path, const char *name)
+-{
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_removexattr(path=\"%s\", name=\"%s\")\n",
+-	    path, name);
+-    bb_fullpath(fpath, path);
++int bb_removexattr(const char *path, const char *name){
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_removexattr(path=\"%s\", name=\"%s\")\n",
++		path, name);
++	bb_fullpath(fpath, path);
+ 
+-    return log_syscall("lremovexattr", lremovexattr(fpath, name), 0);
++	return log_syscall("lremovexattr", lremovexattr(fpath, name), 0);
+ }
+ #endif
+ 
+@@ -540,28 +1036,27 @@
+  *
+  * Introduced in version 2.3
+  */
+-int bb_opendir(const char *path, struct fuse_file_info *fi)
+-{
+-    DIR *dp;
+-    int retstat = 0;
+-    char fpath[PATH_MAX];
+-    
+-    log_msg("\nbb_opendir(path=\"%s\", fi=0x%08x)\n",
++int bb_opendir(const char *path, struct fuse_file_info *fi){
++	DIR *dp;
++	int retstat = 0;
++	char fpath[PATH_MAX];
++	
++	log_msg("\nbb_opendir(path=\"%s\", fi=0x%08x)\n",
+ 	  path, fi);
+-    bb_fullpath(fpath, path);
++	bb_fullpath(fpath, path);
+ 
+-    // since opendir returns a pointer, takes some custom handling of
+-    // return status.
+-    dp = opendir(fpath);
+-    log_msg("    opendir returned 0x%p\n", dp);
+-    if (dp == NULL)
++	// since opendir returns a pointer, takes some custom handling of
++	// return status.
++	dp = opendir(fpath);
++	log_msg("    opendir returned 0x%p\n", dp);
++	if (dp == NULL)
+ 	retstat = log_error("bb_opendir opendir");
+-    
+-    fi->fh = (intptr_t) dp;
+-    
+-    log_fi(fi);
+-    
+-    return retstat;
++	
++	fi->fh = (intptr_t) dp;
++	
++	log_fi(fi);
++	
++	return retstat;
+ }
+ 
+ /** Read directory
+@@ -586,61 +1081,60 @@
+  * Introduced in version 2.3
+  */
+ 
+-int bb_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset,
+-	       struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    DIR *dp;
+-    struct dirent *de;
+-    
+-    log_msg("\nbb_readdir(path=\"%s\", buf=0x%08x, filler=0x%08x, offset=%lld, fi=0x%08x)\n",
+-	    path, buf, filler, offset, fi);
+-    // once again, no need for fullpath -- but note that I need to cast fi->fh
+-    dp = (DIR *) (uintptr_t) fi->fh;
+-
+-    // Every directory contains at least two entries: . and ..  If my
+-    // first call to the system readdir() returns NULL I've got an
+-    // error; near as I can tell, that's the only condition under
+-    // which I can get an error from readdir()
+-    de = readdir(dp);
+-    log_msg("    readdir returned 0x%p\n", de);
+-    if (de == 0) {
++int bb_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi){
++	int retstat = 0;
++	DIR *dp;
++	struct dirent *de;
++	
++	log_msg("\nbb_readdir(path=\"%s\", buf=0x%08x, filler=0x%08x, offset=%lld, fi=0x%08x)\n",
++		path, buf, filler, offset, fi);
++	// once again, no need for fullpath -- but note that I need to cast fi->fh
++	dp = (DIR *) (uintptr_t) fi->fh;
++
++	// Every directory contains at least two entries: . and ..  If my
++	// first call to the system readdir() returns NULL I've got an
++	// error; near as I can tell, that's the only condition under
++	// which I can get an error from readdir()
++	de = readdir(dp);
++	log_msg("    readdir returned 0x%p\n", de);
++	if (de == 0) {
+ 	retstat = log_error("bb_readdir readdir");
+ 	return retstat;
+-    }
++	}
+ 
+-    // This will copy the entire directory into the buffer.  The loop exits
+-    // when either the system readdir() returns NULL, or filler()
+-    // returns something non-zero.  The first case just means I've
+-    // read the whole directory; the second means the buffer is full.
+-    do {
+-	log_msg("calling filler with name %s\n", de->d_name);
+-	if (filler(buf, de->d_name, NULL, 0) != 0) {
+-	    log_msg("    ERROR bb_readdir filler:  buffer full");
+-	    return -ENOMEM;
+-	}
+-    } while ((de = readdir(dp)) != NULL);
+-    
+-    log_fi(fi);
+-    
+-    return retstat;
++	// This will copy the entire directory into the buffer.  The loop exits
++	// when either the system readdir() returns NULL, or filler()
++	// returns something non-zero.  The first case just means I've
++	// read the whole directory; the second means the buffer is full.
++	do {
++		log_msg("calling filler with name %s\n", de->d_name);
++		if (filler(buf, de->d_name, NULL, 0) != 0) {
++			log_msg("#################1\n");
++			log_msg("    ERROR bb_readdir filler:  buffer full");
++			return -ENOMEM;
++		}
++		log_msg("#################2\n");
++	} while ((de = readdir(dp)) != NULL);
++	
++	log_fi(fi);
++	
++	return retstat;
+ }
+ 
+ /** Release directory
+  *
+  * Introduced in version 2.3
+  */
+-int bb_releasedir(const char *path, struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    
+-    log_msg("\nbb_releasedir(path=\"%s\", fi=0x%08x)\n",
+-	    path, fi);
+-    log_fi(fi);
+-    
+-    closedir((DIR *) (uintptr_t) fi->fh);
+-    
+-    return retstat;
++int bb_releasedir(const char *path, struct fuse_file_info *fi){
++	int retstat = 0;
++	
++	log_msg("\nbb_releasedir(path=\"%s\", fi=0x%08x)\n",
++		path, fi);
++	log_fi(fi);
++	
++	closedir((DIR *) (uintptr_t) fi->fh);
++	
++	return retstat;
+ }
+ 
+ /** Synchronize directory contents
+@@ -652,15 +1146,14 @@
+  */
+ // when exactly is this called?  when a user calls fsync and it
+ // happens to be a directory? ??? >>> I need to implement this...
+-int bb_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    
+-    log_msg("\nbb_fsyncdir(path=\"%s\", datasync=%d, fi=0x%08x)\n",
+-	    path, datasync, fi);
+-    log_fi(fi);
+-    
+-    return retstat;
++int bb_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi){
++	int retstat = 0;
++	
++	log_msg("\nbb_fsyncdir(path=\"%s\", datasync=%d, fi=0x%08x)\n",
++		path, datasync, fi);
++	log_fi(fi);
++	
++	return retstat;
+ }
+ 
+ /**
+@@ -680,14 +1173,18 @@
+ // parameter coming in here, or else the fact should be documented
+ // (and this might as well return void, as it did in older versions of
+ // FUSE).
+-void *bb_init(struct fuse_conn_info *conn)
+-{
+-    log_msg("\nbb_init()\n");
+-    
+-    log_conn(conn);
+-    log_fuse_context(fuse_get_context());
+-    
+-    return BB_DATA;
++void *bb_init(struct fuse_conn_info *conn){
++	log_msg("\nbb_init()\n");
++
++	char cmd[200];
++	sprintf(cmd, "mkdir -p %s/.META", BB_DATA->rootdir);
++	int status = system(cmd);
++	log_msg("Initialized .META dir..\n");
++	
++	log_conn(conn);
++	log_fuse_context(fuse_get_context());
++	
++	return BB_DATA;
+ }
+ 
+ /**
+@@ -697,9 +1194,8 @@
+  *
+  * Introduced in version 2.3
+  */
+-void bb_destroy(void *userdata)
+-{
+-    log_msg("\nbb_destroy(userdata=0x%08x)\n", userdata);
++void bb_destroy(void *userdata){
++	log_msg("\nbb_destroy(userdata=0x%08x)\n", userdata);
+ }
+ 
+ /**
+@@ -713,27 +1209,26 @@
+  *
+  * Introduced in version 2.5
+  */
+-int bb_access(const char *path, int mask)
+-{
+-    int retstat = 0;
+-    char fpath[PATH_MAX];
++int bb_access(const char *path, int mask){
++	int retstat = 0;
++	char fpath[PATH_MAX];
+    
+-    log_msg("\nbb_access(path=\"%s\", mask=0%o)\n",
+-	    path, mask);
+-    bb_fullpath(fpath, path);
+-    
+-    retstat = access(fpath, mask);
+-    
+-    if (retstat < 0)
++	log_msg("\nbb_access(path=\"%s\", mask=0%o)\n",
++		path, mask);
++	bb_fullpath(fpath, path);
++	
++	retstat = access(fpath, mask);
++	
++	if (retstat < 0)
+ 	retstat = log_error("bb_access access");
+-    
+-    return retstat;
++	
++	return retstat;
+ }
+ 
+ /**
+  * Create and open a file
+  *
+- * If the file does not exist, first create it with the specified
++ * If tbwrecified
+  * mode, and then open it.
+  *
+  * If this method is not implemented or under Linux kernel
+@@ -757,19 +1252,18 @@
+  *
+  * Introduced in version 2.5
+  */
+-int bb_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    
+-    log_msg("\nbb_ftruncate(path=\"%s\", offset=%lld, fi=0x%08x)\n",
+-	    path, offset, fi);
+-    log_fi(fi);
+-    
+-    retstat = ftruncate(fi->fh, offset);
+-    if (retstat < 0)
++int bb_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi){
++	int retstat = 0;
++	
++	log_msg("\nbb_ftruncate(path=\"%s\", offset=%lld, fi=0x%08x)\n",
++		path, offset, fi);
++	log_fi(fi);
++	
++	retstat = ftruncate(fi->fh, offset);
++	if (retstat < 0)
+ 	retstat = log_error("bb_ftruncate ftruncate");
+-    
+-    return retstat;
++	
++	return retstat;
+ }
+ 
+ /**
+@@ -784,128 +1278,528 @@
+  *
+  * Introduced in version 2.5
+  */
+-int bb_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi)
+-{
+-    int retstat = 0;
+-    
+-    log_msg("\nbb_fgetattr(path=\"%s\", statbuf=0x%08x, fi=0x%08x)\n",
+-	    path, statbuf, fi);
+-    log_fi(fi);
+-
+-    // On FreeBSD, trying to do anything with the mountpoint ends up
+-    // opening it, and then using the FD for an fgetattr.  So in the
+-    // special case of a path of "/", I need to do a getattr on the
+-    // underlying root directory instead of doing the fgetattr().
+-    if (!strcmp(path, "/"))
++int bb_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi){
++	int retstat = 0;
++	
++	log_msg("\nbb_fgetattr(path=\"%s\", statbuf=0x%08x, fi=0x%08x)\n",
++		path, statbuf, fi);
++	log_fi(fi);
++
++	// On FreeBSD, trying to do anything with the mountpoint ends up
++	// opening it, and then using the FD for an fgetattr.  So in the
++	// special case of a path of "/", I need to do a getattr on the
++	// underlying root directory instead of doing the fgetattr().
++	if (!strcmp(path, "/"))
+ 	return bb_getattr(path, statbuf);
+-    
+-    retstat = fstat(fi->fh, statbuf);
+-    if (retstat < 0)
+-	retstat = log_error("bb_fgetattr fstat");
+-    
+-    log_stat(statbuf);
+-    
+-    return retstat;
++	
++	retstat = fstat(fi->fh, statbuf);
++	if (retstat < 0)
++		retstat = log_error("bb_fgetattr fstat");
++
++	if(S_ISREG(statbuf->st_mode)){
++		log_msg("dsngfdsnfn\n");
++		struct file_node * inode = getfilenode(path);
++		statbuf->st_size = inode->size;
++	}
++	
++	log_stat(statbuf);
++	
++	return retstat;
+ }
+ 
+ struct fuse_operations bb_oper = {
+-  .getattr = bb_getattr,
+-  .readlink = bb_readlink,
+-  // no .getdir -- that's deprecated
+-  .getdir = NULL,
+-  .mknod = bb_mknod,
+-  .mkdir = bb_mkdir,
+-  .unlink = bb_unlink,
+-  .rmdir = bb_rmdir,
+-  .symlink = bb_symlink,
+-  .rename = bb_rename,
+-  .link = bb_link,
+-  .chmod = bb_chmod,
+-  .chown = bb_chown,
+-  .truncate = bb_truncate,
+-  .utime = bb_utime,
+-  .open = bb_open,
+-  .read = bb_read,
+-  .write = bb_write,
+-  /** Just a placeholder, don't set */ // huh???
+-  .statfs = bb_statfs,
+-  .flush = bb_flush,
+-  .release = bb_release,
+-  .fsync = bb_fsync,
+-  
+-#ifdef HAVE_SYS_XATTR_H
+-  .setxattr = bb_setxattr,
+-  .getxattr = bb_getxattr,
+-  .listxattr = bb_listxattr,
+-  .removexattr = bb_removexattr,
+-#endif
+-  
+-  .opendir = bb_opendir,
+-  .readdir = bb_readdir,
+-  .releasedir = bb_releasedir,
+-  .fsyncdir = bb_fsyncdir,
+-  .init = bb_init,
+-  .destroy = bb_destroy,
+-  .access = bb_access,
+-  .ftruncate = bb_ftruncate,
+-  .fgetattr = bb_fgetattr
++	.getattr = bb_getattr,
++	.readlink = bb_readlink,
++	// no .getdir -- that's deprecated
++	.getdir = NULL,
++	.mknod = bb_mknod,
++	.mkdir = bb_mkdir,
++	.unlink = bb_unlink,
++	.rmdir = bb_rmdir,
++	.symlink = bb_symlink,
++	.rename = bb_rename,
++	.link = bb_link,
++	.chmod = bb_chmod,
++	.chown = bb_chown,
++	.truncate = bb_truncate,
++	.utime = bb_utime,
++	.open = bb_open,
++	.read = bb_read,
++	.write = bb_write,
++	/** Just a placeholder, don't set */ // huh???
++	.statfs = bb_statfs,
++	.flush = bb_flush,
++	.release = bb_release,
++	.fsync = bb_fsync,
++
++	#ifdef HAVE_SYS_XATTR_H
++	.setxattr = bb_setxattr,
++	.getxattr = bb_getxattr,
++	.listxattr = bb_listxattr,
++	.removexattr = bb_removexattr,
++	#endif
++
++	.opendir = bb_opendir,
++	.readdir = bb_readdir,
++	.releasedir = bb_releasedir,
++	.fsyncdir = bb_fsyncdir,
++	.init = bb_init,
++	.destroy = bb_destroy,
++	.access = bb_access,
++	.ftruncate = bb_ftruncate,
++	.fgetattr = bb_fgetattr
+ };
+ 
+-void bb_usage()
+-{
+-    fprintf(stderr, "usage:  bbfs [FUSE and mount options] rootDir mountPoint\n");
+-    abort();
++void bb_usage(){
++	fprintf(stderr, "usage:  bbfs [FUSE and mount options] rootDir mountPoint\n");
++	abort();
+ }
+ 
+-int main(int argc, char *argv[])
++// // get number of directories in directory
++// int dircount(char *path){
++// 	int count = 0;
++// 	DIR *dir;
++// 	struct dirent *entry;
++
++// 	dir = opendir(path);
++// 	if (dir == NULL) return -1;
++
++// 	while ((entry = readdir(dir)) != NULL) {
++// 		if (entry->d_type == DT_DIR){ /* If the entry is a directory*/
++// 			count++;
++// 		}
++// 	}
++
++// 	closedir(dir);
++// }
++
++// // get number of directories in directory
++// int filecount(char *path){
++// 	int count = 0;
++// 	DIR *dir;
++// 	struct dirent *entry;
++
++// 	dir = opendir(path);
++// 	if (dir == NULL) return -1;
++
++// 	while ((entry = readdir(dir)) != NULL) {
++// 		if (entry->d_type == DT_REG){ /* If the entry is a regular file */
++// 			count++;
++// 		}
++// 	}
++
++// 	closedir(dir);
++// }
++
++
++int main(int argc, char *argv[]){
++	int fuse_stat;
++	struct bb_state *bb_data;
++
++	// bbfs doesn't do any access checking on its own (the comment
++	// blocks in fuse.h mention some of the functions that need
++	// accesses checked -- but note there are other functions, like
++	// chown(), that also need checking!).  Since running bbfs as root
++	// will therefore open Metrodome-sized holes in the system
++	// security, we'll check if root is trying to mount the filesystem
++	// and refuse if it is.  The somewhat smaller hole of an ordinary
++	// user doing it with the allow_other flag is still there because
++	// I don't want to parse the options string.
++	if ((getuid() == 0) || (geteuid() == 0)) {
++		fprintf(stderr, "Running BBFS as root opens unnacceptable security holes\n");
++		return 1;
++	}
++
++	// See which version of fuse we're running
++	fprintf(stderr, "Fuse library version %d.%d\n", FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION);
++	
++	// Perform some sanity checking on the command line:  make sure
++	// there are enough arguments, and that neither of the last two
++	// start with a hyphen (this will break if you actually have a
++	// rootpoint or mountpoint whose name starts with a hyphen, but so
++	// will a zillion other programs)	
++	if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
++	bb_usage();
++	
++	char *rootdir = realpath(argv[argc-2], NULL);
++	fprintf(stderr, "Cleaning %s...\n", rootdir);
++	char cmd[100];
++	sprintf(cmd, "rm -rf %s/* .META", rootdir);
++	int status = system(cmd);
++	fprintf(stderr, "\t Done with exit code %d\n", status);
++	// fprintf(stderr, "Number of files:%d\nNumber of directories:%d\n", filecount(rootdir), dircount(rootdir));
++
++	bb_data = malloc(sizeof(struct bb_state));
++	if (bb_data == NULL) {
++		perror("main calloc");
++		abort();
++	}
++
++	// Pull the rootdir out of the argument list and save it in my
++	// internal data
++	bb_data->rootdir = realpath(argv[argc-2], NULL);
++	argv[argc-2] = argv[argc-1];
++	argv[argc-1] = NULL;
++	argc--;
++	
++	bb_data->logfile = log_open();
++	
++	// turn over control to fuse
++	fprintf(stderr, "about to call fuse_main\n");
++	fuse_stat = fuse_main(argc, argv, &bb_oper, bb_data);
++	fprintf(stderr, "fuse_main returned %d\n", fuse_stat);
++	
++	return fuse_stat;
++}
++
++
++#ifndef SHA1_H
++#define SHA1_H
++
++/*
++   SHA-1 in C
++   By Steve Reid <steve@edmweb.com>
++   100% Public Domain
++ */
++
++typedef struct
+ {
+-    int fuse_stat;
+-    struct bb_state *bb_data;
++    uint32_t state[5];
++    uint32_t count[2];
++    unsigned char buffer[64];
++} SHA1_CTX;
++
++void SHA1Transform(
++    uint32_t state[5],
++    const unsigned char buffer[64]
++    );
++
++void SHA1Init(
++    SHA1_CTX * context
++    );
++
++void SHA1Update(
++    SHA1_CTX * context,
++    const unsigned char *data,
++    uint32_t len
++    );
++
++void SHA1Final(
++    unsigned char digest[20],
++    SHA1_CTX * context
++    );
++
++void SHA1(
++    char *hash_out,
++    const char *str,
++    int len);
++
++#endif /* SHA1_H */
++
++/*
++SHA-1 in C
++By Steve Reid <steve@edmweb.com>
++100% Public Domain
++Test Vectors (from FIPS PUB 180-1)
++"abc"
++  A9993E36 4706816A BA3E2571 7850C26C 9CD0D89D
++"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
++  84983E44 1C3BD26E BAAE4AA1 F95129E5 E54670F1
++A million repetitions of "a"
++  34AA973C D4C4DAA4 F61EEB2B DBAD2731 6534016F
++*/
++
++/* #define LITTLE_ENDIAN * This should be #define'd already, if true. */
++/* #define SHA1HANDSOFF * Copies data before messing with it. */
++
++#define SHA1HANDSOFF
++
++#include <stdio.h>
++#include <string.h>
++
++/* for uint32_t */
++#include <stdint.h>
++
++
++
++#define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
++
++/* blk0() and blk() perform the initial expand. */
++/* I got the idea of expanding during the round function from SSLeay */
++#if BYTE_ORDER == LITTLE_ENDIAN
++#define blk0(i) (block->l[i] = (rol(block->l[i],24)&0xFF00FF00) \
++    |(rol(block->l[i],8)&0x00FF00FF))
++#elif BYTE_ORDER == BIG_ENDIAN
++#define blk0(i) block->l[i]
++#else
++#error "Endianness not defined!"
++#endif
++#define blk(i) (block->l[i&15] = rol(block->l[(i+13)&15]^block->l[(i+8)&15] \
++    ^block->l[(i+2)&15]^block->l[i&15],1))
++
++/* (R0+R1), R2, R3, R4 are the different operations used in SHA1 */
++#define R0(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk0(i)+0x5A827999+rol(v,5);w=rol(w,30);
++#define R1(v,w,x,y,z,i) z+=((w&(x^y))^y)+blk(i)+0x5A827999+rol(v,5);w=rol(w,30);
++#define R2(v,w,x,y,z,i) z+=(w^x^y)+blk(i)+0x6ED9EBA1+rol(v,5);w=rol(w,30);
++#define R3(v,w,x,y,z,i) z+=(((w|x)&y)|(w&x))+blk(i)+0x8F1BBCDC+rol(v,5);w=rol(w,30);
++#define R4(v,w,x,y,z,i) z+=(w^x^y)+blk(i)+0xCA62C1D6+rol(v,5);w=rol(w,30);
++
++
++/* Hash a single 512-bit block. This is the core of the algorithm. */
++
++void SHA1Transform(
++    uint32_t state[5],
++    const unsigned char buffer[64]
++)
++{
++    uint32_t a, b, c, d, e;
++
++    typedef union
++    {
++        unsigned char c[64];
++        uint32_t l[16];
++    } CHAR64LONG16;
++
++#ifdef SHA1HANDSOFF
++    CHAR64LONG16 block[1];      /* use array to appear as a pointer */
++
++    memcpy(block, buffer, 64);
++#else
++    /* The following had better never be used because it causes the
++     * pointer-to-const buffer to be cast into a pointer to non-const.
++     * And the result is written through.  I threw a "const" in, hoping
++     * this will cause a diagnostic.
++     */
++    CHAR64LONG16 *block = (const CHAR64LONG16 *) buffer;
++#endif
++    /* Copy context->state[] to working vars */
++    a = state[0];
++    b = state[1];
++    c = state[2];
++    d = state[3];
++    e = state[4];
++    /* 4 rounds of 20 operations each. Loop unrolled. */
++    R0(a, b, c, d, e, 0);
++    R0(e, a, b, c, d, 1);
++    R0(d, e, a, b, c, 2);
++    R0(c, d, e, a, b, 3);
++    R0(b, c, d, e, a, 4);
++    R0(a, b, c, d, e, 5);
++    R0(e, a, b, c, d, 6);
++    R0(d, e, a, b, c, 7);
++    R0(c, d, e, a, b, 8);
++    R0(b, c, d, e, a, 9);
++    R0(a, b, c, d, e, 10);
++    R0(e, a, b, c, d, 11);
++    R0(d, e, a, b, c, 12);
++    R0(c, d, e, a, b, 13);
++    R0(b, c, d, e, a, 14);
++    R0(a, b, c, d, e, 15);
++    R1(e, a, b, c, d, 16);
++    R1(d, e, a, b, c, 17);
++    R1(c, d, e, a, b, 18);
++    R1(b, c, d, e, a, 19);
++    R2(a, b, c, d, e, 20);
++    R2(e, a, b, c, d, 21);
++    R2(d, e, a, b, c, 22);
++    R2(c, d, e, a, b, 23);
++    R2(b, c, d, e, a, 24);
++    R2(a, b, c, d, e, 25);
++    R2(e, a, b, c, d, 26);
++    R2(d, e, a, b, c, 27);
++    R2(c, d, e, a, b, 28);
++    R2(b, c, d, e, a, 29);
++    R2(a, b, c, d, e, 30);
++    R2(e, a, b, c, d, 31);
++    R2(d, e, a, b, c, 32);
++    R2(c, d, e, a, b, 33);
++    R2(b, c, d, e, a, 34);
++    R2(a, b, c, d, e, 35);
++    R2(e, a, b, c, d, 36);
++    R2(d, e, a, b, c, 37);
++    R2(c, d, e, a, b, 38);
++    R2(b, c, d, e, a, 39);
++    R3(a, b, c, d, e, 40);
++    R3(e, a, b, c, d, 41);
++    R3(d, e, a, b, c, 42);
++    R3(c, d, e, a, b, 43);
++    R3(b, c, d, e, a, 44);
++    R3(a, b, c, d, e, 45);
++    R3(e, a, b, c, d, 46);
++    R3(d, e, a, b, c, 47);
++    R3(c, d, e, a, b, 48);
++    R3(b, c, d, e, a, 49);
++    R3(a, b, c, d, e, 50);
++    R3(e, a, b, c, d, 51);
++    R3(d, e, a, b, c, 52);
++    R3(c, d, e, a, b, 53);
++    R3(b, c, d, e, a, 54);
++    R3(a, b, c, d, e, 55);
++    R3(e, a, b, c, d, 56);
++    R3(d, e, a, b, c, 57);
++    R3(c, d, e, a, b, 58);
++    R3(b, c, d, e, a, 59);
++    R4(a, b, c, d, e, 60);
++    R4(e, a, b, c, d, 61);
++    R4(d, e, a, b, c, 62);
++    R4(c, d, e, a, b, 63);
++    R4(b, c, d, e, a, 64);
++    R4(a, b, c, d, e, 65);
++    R4(e, a, b, c, d, 66);
++    R4(d, e, a, b, c, 67);
++    R4(c, d, e, a, b, 68);
++    R4(b, c, d, e, a, 69);
++    R4(a, b, c, d, e, 70);
++    R4(e, a, b, c, d, 71);
++    R4(d, e, a, b, c, 72);
++    R4(c, d, e, a, b, 73);
++    R4(b, c, d, e, a, 74);
++    R4(a, b, c, d, e, 75);
++    R4(e, a, b, c, d, 76);
++    R4(d, e, a, b, c, 77);
++    R4(c, d, e, a, b, 78);
++    R4(b, c, d, e, a, 79);
++    /* Add the working vars back into context.state[] */
++    state[0] += a;
++    state[1] += b;
++    state[2] += c;
++    state[3] += d;
++    state[4] += e;
++    /* Wipe variables */
++    a = b = c = d = e = 0;
++#ifdef SHA1HANDSOFF
++    memset(block, '\0', sizeof(block));
++#endif
++}
++
++
++/* SHA1Init - Initialize new context */
+ 
+-    // bbfs doesn't do any access checking on its own (the comment
+-    // blocks in fuse.h mention some of the functions that need
+-    // accesses checked -- but note there are other functions, like
+-    // chown(), that also need checking!).  Since running bbfs as root
+-    // will therefore open Metrodome-sized holes in the system
+-    // security, we'll check if root is trying to mount the filesystem
+-    // and refuse if it is.  The somewhat smaller hole of an ordinary
+-    // user doing it with the allow_other flag is still there because
+-    // I don't want to parse the options string.
+-    if ((getuid() == 0) || (geteuid() == 0)) {
+-	fprintf(stderr, "Running BBFS as root opens unnacceptable security holes\n");
+-	return 1;
++void SHA1Init(
++    SHA1_CTX * context
++)
++{
++    /* SHA1 initialization constants */
++    context->state[0] = 0x67452301;
++    context->state[1] = 0xEFCDAB89;
++    context->state[2] = 0x98BADCFE;
++    context->state[3] = 0x10325476;
++    context->state[4] = 0xC3D2E1F0;
++    context->count[0] = context->count[1] = 0;
++}
++
++
++/* Run your data through this. */
++
++void SHA1Update(
++    SHA1_CTX * context,
++    const unsigned char *data,
++    uint32_t len
++)
++{
++    uint32_t i;
++
++    uint32_t j;
++
++    j = context->count[0];
++    if ((context->count[0] += len << 3) < j)
++        context->count[1]++;
++    context->count[1] += (len >> 29);
++    j = (j >> 3) & 63;
++    if ((j + len) > 63)
++    {
++        memcpy(&context->buffer[j], data, (i = 64 - j));
++        SHA1Transform(context->state, context->buffer);
++        for (; i + 63 < len; i += 64)
++        {
++            SHA1Transform(context->state, &data[i]);
++        }
++        j = 0;
+     }
++    else
++        i = 0;
++    memcpy(&context->buffer[j], &data[i], len - i);
++}
+ 
+-    // See which version of fuse we're running
+-    fprintf(stderr, "Fuse library version %d.%d\n", FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION);
+-    
+-    // Perform some sanity checking on the command line:  make sure
+-    // there are enough arguments, and that neither of the last two
+-    // start with a hyphen (this will break if you actually have a
+-    // rootpoint or mountpoint whose name starts with a hyphen, but so
+-    // will a zillion other programs)
+-    if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
+-	bb_usage();
+ 
+-    bb_data = malloc(sizeof(struct bb_state));
+-    if (bb_data == NULL) {
+-	perror("main calloc");
+-	abort();
++/* Add padding and return the message digest. */
++
++void SHA1Final(
++    unsigned char digest[20],
++    SHA1_CTX * context
++)
++{
++    unsigned i;
++
++    unsigned char finalcount[8];
++
++    unsigned char c;
++
++#if 0    /* untested "improvement" by DHR */
++    /* Convert context->count to a sequence of bytes
++     * in finalcount.  Second element first, but
++     * big-endian order within element.
++     * But we do it all backwards.
++     */
++    unsigned char *fcp = &finalcount[8];
++    for (i = 0; i < 2; i++)
++    {
++        uint32_t t = context->count[i];
++        int j;
++        for (j = 0; j < 4; t >>= 8, j++)
++            *--fcp = (unsigned char) t}
++#else
++    for (i = 0; i < 8; i++)
++    {
++        finalcount[i] = (unsigned char) ((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);      /* Endian independent */
++    }
++#endif
++    c = 0200;
++    SHA1Update(context, &c, 1);
++    while ((context->count[0] & 504) != 448)
++    {
++        c = 0000;
++        SHA1Update(context, &c, 1);
+     }
++    SHA1Update(context, finalcount, 8); /* Should cause a SHA1Transform() */
++    for (i = 0; i < 20; i++)
++    {
++        digest[i] = (unsigned char)
++            ((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
++    }
++    /* Wipe variables */
++    memset(context, '\0', sizeof(*context));
++    memset(&finalcount, '\0', sizeof(finalcount));
++}
+ 
+-    // Pull the rootdir out of the argument list and save it in my
+-    // internal data
+-    bb_data->rootdir = realpath(argv[argc-2], NULL);
+-    argv[argc-2] = argv[argc-1];
+-    argv[argc-1] = NULL;
+-    argc--;
+-    
+-    bb_data->logfile = log_open();
+-    
+-    // turn over control to fuse
+-    fprintf(stderr, "about to call fuse_main\n");
+-    fuse_stat = fuse_main(argc, argv, &bb_oper, bb_data);
+-    fprintf(stderr, "fuse_main returned %d\n", fuse_stat);
+-    
+-    return fuse_stat;
++void SHA1(
++    char *hash_out,
++    const char *str,
++    int len)
++{
++    SHA1_CTX ctx;
++    unsigned int ii;
++
++    SHA1Init(&ctx);
++    for (ii=0; ii<len; ii+=1)
++        SHA1Update(&ctx, (const unsigned char*)str + ii, 1);
++    SHA1Final((unsigned char *)hash_out, &ctx);
++    hash_out[20] = '\0';
+ }
++
++char * get_hash(const char *buf){
++	char result[21];
++	char *hexresult = malloc(SIZE_HASH*sizeof(char));
++	size_t offset;
++
++	/* calculate hash */
++	SHA1( result, buf, BLOCK_SZ);
++
++	/* format the hash for comparison */
++	for( offset = 0; offset < 20; offset++) {
++		sprintf( ( hexresult + (2*offset)), "%02x", result[offset]&0xff);
++	}
++	hexresult[41] = '\0';
++
++	return hexresult;
++}
+\ No newline at end of file
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/config.h /home/rganvir/temp/fuse-tutorial-2016-03-25/src/config.h
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/config.h	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/config.h	2016-10-24 05:04:33.235928697 +0530
+@@ -0,0 +1,149 @@
++/* src/config.h.  Generated from config.h.in by configure.  */
++/* src/config.h.in.  Generated from configure.ac by autoheader.  */
++
++/* Define to 1 if your system has a working `chown' function. */
++#define HAVE_CHOWN 1
++
++/* Define to 1 if you have the <fcntl.h> header file. */
++#define HAVE_FCNTL_H 1
++
++/* Define to 1 if you have the `fdatasync' function. */
++#define HAVE_FDATASYNC 1
++
++/* Define to 1 if you have the `ftruncate' function. */
++#define HAVE_FTRUNCATE 1
++
++/* Define to 1 if you have the <inttypes.h> header file. */
++#define HAVE_INTTYPES_H 1
++
++/* Define to 1 if you have the <limits.h> header file. */
++#define HAVE_LIMITS_H 1
++
++/* Define to 1 if your system has a GNU libc compatible `malloc' function, and
++   to 0 otherwise. */
++#define HAVE_MALLOC 1
++
++/* Define to 1 if you have the <memory.h> header file. */
++#define HAVE_MEMORY_H 1
++
++/* Define to 1 if you have the `mkdir' function. */
++#define HAVE_MKDIR 1
++
++/* Define to 1 if you have the `mkfifo' function. */
++#define HAVE_MKFIFO 1
++
++/* Define to 1 if you have the `realpath' function. */
++#define HAVE_REALPATH 1
++
++/* Define to 1 if you have the `rmdir' function. */
++#define HAVE_RMDIR 1
++
++/* Define to 1 if you have the <stdint.h> header file. */
++#define HAVE_STDINT_H 1
++
++/* Define to 1 if you have the <stdlib.h> header file. */
++#define HAVE_STDLIB_H 1
++
++/* Define to 1 if you have the `strerror' function. */
++#define HAVE_STRERROR 1
++
++/* Define to 1 if you have the <strings.h> header file. */
++#define HAVE_STRINGS_H 1
++
++/* Define to 1 if you have the <string.h> header file. */
++#define HAVE_STRING_H 1
++
++/* Define to 1 if `st_blksize' is a member of `struct stat'. */
++#define HAVE_STRUCT_STAT_ST_BLKSIZE 1
++
++/* Define to 1 if `st_blocks' is a member of `struct stat'. */
++#define HAVE_STRUCT_STAT_ST_BLOCKS 1
++
++/* Define to 1 if `st_rdev' is a member of `struct stat'. */
++#define HAVE_STRUCT_STAT_ST_RDEV 1
++
++/* Define to 1 if your `struct stat' has `st_blocks'. Deprecated, use
++   `HAVE_STRUCT_STAT_ST_BLOCKS' instead. */
++#define HAVE_ST_BLOCKS 1
++
++/* Define to 1 if you have the <sys/statvfs.h> header file. */
++#define HAVE_SYS_STATVFS_H 1
++
++/* Define to 1 if you have the <sys/stat.h> header file. */
++#define HAVE_SYS_STAT_H 1
++
++/* Define to 1 if you have the <sys/types.h> header file. */
++#define HAVE_SYS_TYPES_H 1
++
++/* Define to 1 if you have the <sys/xattr.h> header file. */
++#define HAVE_SYS_XATTR_H 1
++
++/* Define to 1 if you have the <unistd.h> header file. */
++#define HAVE_UNISTD_H 1
++
++/* Define to 1 if you have the `utime' function. */
++#define HAVE_UTIME 1
++
++/* Define to 1 if you have the <utime.h> header file. */
++#define HAVE_UTIME_H 1
++
++/* Define to 1 if `lstat' dereferences a symlink specified with a trailing
++   slash. */
++#define LSTAT_FOLLOWS_SLASHED_SYMLINK 1
++
++/* Name of package */
++#define PACKAGE "fuse-tutorial"
++
++/* Define to the address where bug reports for this package should be sent. */
++#define PACKAGE_BUGREPORT "joseph@pfeifferfamily.net"
++
++/* Define to the full name of this package. */
++#define PACKAGE_NAME "fuse-tutorial"
++
++/* Define to the full name and version of this package. */
++#define PACKAGE_STRING "fuse-tutorial 2016-03-25"
++
++/* Define to the one symbol short name of this package. */
++#define PACKAGE_TARNAME "fuse-tutorial"
++
++/* Define to the home page for this package. */
++#define PACKAGE_URL ""
++
++/* Define to the version of this package. */
++#define PACKAGE_VERSION "2016-03-25"
++
++/* Define to 1 if you have the ANSI C header files. */
++#define STDC_HEADERS 1
++
++/* Version number of package */
++#define VERSION "2016-03-25"
++
++/* Define for Solaris 2.5.1 so the uint64_t typedef from <sys/synch.h>,
++   <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the
++   #define below would cause a syntax error. */
++/* #undef _UINT64_T */
++
++/* Define to `int' if <sys/types.h> doesn't define. */
++/* #undef gid_t */
++
++/* Define to rpl_malloc if the replacement function should be used. */
++/* #undef malloc */
++
++/* Define to `int' if <sys/types.h> does not define. */
++/* #undef mode_t */
++
++/* Define to `long int' if <sys/types.h> does not define. */
++/* #undef off_t */
++
++/* Define to `int' if <sys/types.h> does not define. */
++/* #undef pid_t */
++
++/* Define to `unsigned int' if <sys/types.h> does not define. */
++/* #undef size_t */
++
++/* Define to `int' if <sys/types.h> doesn't define. */
++/* #undef uid_t */
++
++/* Define to the type of an unsigned integer type of width exactly 64 bits if
++   such a type exists and the standard includes do not define it. */
++/* #undef uint64_t */
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/.deps/bbfs.Po /home/rganvir/temp/fuse-tutorial-2016-03-25/src/.deps/bbfs.Po
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/.deps/bbfs.Po	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/.deps/bbfs.Po	2016-10-24 13:19:22.835813655 +0530
+@@ -0,0 +1,208 @@
++bbfs.o: bbfs.c /usr/include/stdc-predef.h params.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h \
++ /usr/include/limits.h /usr/include/features.h \
++ /usr/include/x86_64-linux-gnu/sys/cdefs.h \
++ /usr/include/x86_64-linux-gnu/bits/wordsize.h \
++ /usr/include/x86_64-linux-gnu/gnu/stubs.h \
++ /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
++ /usr/include/x86_64-linux-gnu/bits/posix1_lim.h \
++ /usr/include/x86_64-linux-gnu/bits/local_lim.h \
++ /usr/include/linux/limits.h \
++ /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
++ /usr/include/x86_64-linux-gnu/bits/xopen_lim.h \
++ /usr/include/x86_64-linux-gnu/bits/stdio_lim.h /usr/include/stdio.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include/stddef.h \
++ /usr/include/x86_64-linux-gnu/bits/types.h \
++ /usr/include/x86_64-linux-gnu/bits/typesizes.h /usr/include/libio.h \
++ /usr/include/_G_config.h /usr/include/wchar.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include/stdarg.h \
++ /usr/include/x86_64-linux-gnu/bits/sys_errlist.h /usr/include/getopt.h \
++ /usr/include/x86_64-linux-gnu/bits/stdio.h \
++ /usr/include/x86_64-linux-gnu/bits/stdio2.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include/stdint.h /usr/include/stdint.h \
++ /usr/include/x86_64-linux-gnu/bits/wchar.h /usr/include/ctype.h \
++ /usr/include/endian.h /usr/include/x86_64-linux-gnu/bits/endian.h \
++ /usr/include/dirent.h /usr/include/x86_64-linux-gnu/bits/dirent.h \
++ /usr/include/errno.h /usr/include/x86_64-linux-gnu/bits/errno.h \
++ /usr/include/linux/errno.h /usr/include/x86_64-linux-gnu/asm/errno.h \
++ /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
++ /usr/include/fcntl.h /usr/include/x86_64-linux-gnu/bits/fcntl.h \
++ /usr/include/x86_64-linux-gnu/bits/fcntl-linux.h /usr/include/time.h \
++ /usr/include/x86_64-linux-gnu/bits/stat.h \
++ /usr/include/x86_64-linux-gnu/bits/fcntl2.h /usr/include/fuse/fuse.h \
++ /usr/include/fuse/fuse_common.h /usr/include/fuse/fuse_opt.h \
++ /usr/include/x86_64-linux-gnu/sys/types.h \
++ /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h \
++ /usr/include/x86_64-linux-gnu/bits/time.h /usr/include/utime.h \
++ /usr/include/x86_64-linux-gnu/sys/stat.h \
++ /usr/include/x86_64-linux-gnu/sys/statvfs.h \
++ /usr/include/x86_64-linux-gnu/bits/statvfs.h \
++ /usr/include/x86_64-linux-gnu/sys/uio.h \
++ /usr/include/x86_64-linux-gnu/bits/uio.h /usr/include/libgen.h \
++ /usr/include/stdlib.h /usr/include/x86_64-linux-gnu/bits/waitflags.h \
++ /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
++ /usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h \
++ /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
++ /usr/include/x86_64-linux-gnu/bits/stdlib.h /usr/include/string.h \
++ /usr/include/x86_64-linux-gnu/bits/string.h \
++ /usr/include/x86_64-linux-gnu/bits/string2.h \
++ /usr/include/x86_64-linux-gnu/bits/string3.h /usr/include/unistd.h \
++ /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
++ /usr/include/x86_64-linux-gnu/bits/environments.h \
++ /usr/include/x86_64-linux-gnu/bits/confname.h \
++ /usr/include/x86_64-linux-gnu/bits/unistd.h log.h
++
++/usr/include/stdc-predef.h:
++
++params.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h:
++
++/usr/include/limits.h:
++
++/usr/include/features.h:
++
++/usr/include/x86_64-linux-gnu/sys/cdefs.h:
++
++/usr/include/x86_64-linux-gnu/bits/wordsize.h:
++
++/usr/include/x86_64-linux-gnu/gnu/stubs.h:
++
++/usr/include/x86_64-linux-gnu/gnu/stubs-64.h:
++
++/usr/include/x86_64-linux-gnu/bits/posix1_lim.h:
++
++/usr/include/x86_64-linux-gnu/bits/local_lim.h:
++
++/usr/include/linux/limits.h:
++
++/usr/include/x86_64-linux-gnu/bits/posix2_lim.h:
++
++/usr/include/x86_64-linux-gnu/bits/xopen_lim.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdio_lim.h:
++
++/usr/include/stdio.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include/stddef.h:
++
++/usr/include/x86_64-linux-gnu/bits/types.h:
++
++/usr/include/x86_64-linux-gnu/bits/typesizes.h:
++
++/usr/include/libio.h:
++
++/usr/include/_G_config.h:
++
++/usr/include/wchar.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include/stdarg.h:
++
++/usr/include/x86_64-linux-gnu/bits/sys_errlist.h:
++
++/usr/include/getopt.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdio.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdio2.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include/stdint.h:
++
++/usr/include/stdint.h:
++
++/usr/include/x86_64-linux-gnu/bits/wchar.h:
++
++/usr/include/ctype.h:
++
++/usr/include/endian.h:
++
++/usr/include/x86_64-linux-gnu/bits/endian.h:
++
++/usr/include/dirent.h:
++
++/usr/include/x86_64-linux-gnu/bits/dirent.h:
++
++/usr/include/errno.h:
++
++/usr/include/x86_64-linux-gnu/bits/errno.h:
++
++/usr/include/linux/errno.h:
++
++/usr/include/x86_64-linux-gnu/asm/errno.h:
++
++/usr/include/asm-generic/errno.h:
++
++/usr/include/asm-generic/errno-base.h:
++
++/usr/include/fcntl.h:
++
++/usr/include/x86_64-linux-gnu/bits/fcntl.h:
++
++/usr/include/x86_64-linux-gnu/bits/fcntl-linux.h:
++
++/usr/include/time.h:
++
++/usr/include/x86_64-linux-gnu/bits/stat.h:
++
++/usr/include/x86_64-linux-gnu/bits/fcntl2.h:
++
++/usr/include/fuse/fuse.h:
++
++/usr/include/fuse/fuse_common.h:
++
++/usr/include/fuse/fuse_opt.h:
++
++/usr/include/x86_64-linux-gnu/sys/types.h:
++
++/usr/include/x86_64-linux-gnu/bits/pthreadtypes.h:
++
++/usr/include/x86_64-linux-gnu/bits/time.h:
++
++/usr/include/utime.h:
++
++/usr/include/x86_64-linux-gnu/sys/stat.h:
++
++/usr/include/x86_64-linux-gnu/sys/statvfs.h:
++
++/usr/include/x86_64-linux-gnu/bits/statvfs.h:
++
++/usr/include/x86_64-linux-gnu/sys/uio.h:
++
++/usr/include/x86_64-linux-gnu/bits/uio.h:
++
++/usr/include/libgen.h:
++
++/usr/include/stdlib.h:
++
++/usr/include/x86_64-linux-gnu/bits/waitflags.h:
++
++/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdlib-float.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdlib.h:
++
++/usr/include/string.h:
++
++/usr/include/x86_64-linux-gnu/bits/string.h:
++
++/usr/include/x86_64-linux-gnu/bits/string2.h:
++
++/usr/include/x86_64-linux-gnu/bits/string3.h:
++
++/usr/include/unistd.h:
++
++/usr/include/x86_64-linux-gnu/bits/posix_opt.h:
++
++/usr/include/x86_64-linux-gnu/bits/environments.h:
++
++/usr/include/x86_64-linux-gnu/bits/confname.h:
++
++/usr/include/x86_64-linux-gnu/bits/unistd.h:
++
++log.h:
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/.deps/log.Po /home/rganvir/temp/fuse-tutorial-2016-03-25/src/.deps/log.Po
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/.deps/log.Po	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/.deps/log.Po	2016-10-24 13:19:22.959813652 +0530
+@@ -0,0 +1,199 @@
++log.o: log.c /usr/include/stdc-predef.h params.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h \
++ /usr/include/limits.h /usr/include/features.h \
++ /usr/include/x86_64-linux-gnu/sys/cdefs.h \
++ /usr/include/x86_64-linux-gnu/bits/wordsize.h \
++ /usr/include/x86_64-linux-gnu/gnu/stubs.h \
++ /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
++ /usr/include/x86_64-linux-gnu/bits/posix1_lim.h \
++ /usr/include/x86_64-linux-gnu/bits/local_lim.h \
++ /usr/include/linux/limits.h \
++ /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
++ /usr/include/x86_64-linux-gnu/bits/xopen_lim.h \
++ /usr/include/x86_64-linux-gnu/bits/stdio_lim.h /usr/include/stdio.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include/stddef.h \
++ /usr/include/x86_64-linux-gnu/bits/types.h \
++ /usr/include/x86_64-linux-gnu/bits/typesizes.h /usr/include/libio.h \
++ /usr/include/_G_config.h /usr/include/wchar.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include/stdarg.h \
++ /usr/include/x86_64-linux-gnu/bits/sys_errlist.h /usr/include/getopt.h \
++ /usr/include/x86_64-linux-gnu/bits/stdio.h \
++ /usr/include/x86_64-linux-gnu/bits/stdio2.h \
++ /usr/lib/gcc/x86_64-linux-gnu/5/include/stdint.h /usr/include/stdint.h \
++ /usr/include/x86_64-linux-gnu/bits/wchar.h /usr/include/errno.h \
++ /usr/include/x86_64-linux-gnu/bits/errno.h /usr/include/linux/errno.h \
++ /usr/include/x86_64-linux-gnu/asm/errno.h \
++ /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
++ /usr/include/fuse/fuse.h /usr/include/fuse/fuse_common.h \
++ /usr/include/fuse/fuse_opt.h /usr/include/x86_64-linux-gnu/sys/types.h \
++ /usr/include/time.h /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h \
++ /usr/include/fcntl.h /usr/include/x86_64-linux-gnu/bits/fcntl.h \
++ /usr/include/x86_64-linux-gnu/bits/fcntl-linux.h \
++ /usr/include/x86_64-linux-gnu/bits/stat.h \
++ /usr/include/x86_64-linux-gnu/bits/fcntl2.h \
++ /usr/include/x86_64-linux-gnu/bits/time.h /usr/include/utime.h \
++ /usr/include/x86_64-linux-gnu/sys/stat.h \
++ /usr/include/x86_64-linux-gnu/sys/statvfs.h \
++ /usr/include/x86_64-linux-gnu/bits/statvfs.h \
++ /usr/include/x86_64-linux-gnu/sys/uio.h \
++ /usr/include/x86_64-linux-gnu/bits/uio.h /usr/include/stdlib.h \
++ /usr/include/x86_64-linux-gnu/bits/waitflags.h \
++ /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
++ /usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h \
++ /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
++ /usr/include/x86_64-linux-gnu/bits/stdlib.h /usr/include/string.h \
++ /usr/include/x86_64-linux-gnu/bits/string.h \
++ /usr/include/x86_64-linux-gnu/bits/string2.h /usr/include/endian.h \
++ /usr/include/x86_64-linux-gnu/bits/endian.h \
++ /usr/include/x86_64-linux-gnu/bits/string3.h /usr/include/unistd.h \
++ /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
++ /usr/include/x86_64-linux-gnu/bits/environments.h \
++ /usr/include/x86_64-linux-gnu/bits/confname.h \
++ /usr/include/x86_64-linux-gnu/bits/unistd.h log.h
++
++/usr/include/stdc-predef.h:
++
++params.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/limits.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include-fixed/syslimits.h:
++
++/usr/include/limits.h:
++
++/usr/include/features.h:
++
++/usr/include/x86_64-linux-gnu/sys/cdefs.h:
++
++/usr/include/x86_64-linux-gnu/bits/wordsize.h:
++
++/usr/include/x86_64-linux-gnu/gnu/stubs.h:
++
++/usr/include/x86_64-linux-gnu/gnu/stubs-64.h:
++
++/usr/include/x86_64-linux-gnu/bits/posix1_lim.h:
++
++/usr/include/x86_64-linux-gnu/bits/local_lim.h:
++
++/usr/include/linux/limits.h:
++
++/usr/include/x86_64-linux-gnu/bits/posix2_lim.h:
++
++/usr/include/x86_64-linux-gnu/bits/xopen_lim.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdio_lim.h:
++
++/usr/include/stdio.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include/stddef.h:
++
++/usr/include/x86_64-linux-gnu/bits/types.h:
++
++/usr/include/x86_64-linux-gnu/bits/typesizes.h:
++
++/usr/include/libio.h:
++
++/usr/include/_G_config.h:
++
++/usr/include/wchar.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include/stdarg.h:
++
++/usr/include/x86_64-linux-gnu/bits/sys_errlist.h:
++
++/usr/include/getopt.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdio.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdio2.h:
++
++/usr/lib/gcc/x86_64-linux-gnu/5/include/stdint.h:
++
++/usr/include/stdint.h:
++
++/usr/include/x86_64-linux-gnu/bits/wchar.h:
++
++/usr/include/errno.h:
++
++/usr/include/x86_64-linux-gnu/bits/errno.h:
++
++/usr/include/linux/errno.h:
++
++/usr/include/x86_64-linux-gnu/asm/errno.h:
++
++/usr/include/asm-generic/errno.h:
++
++/usr/include/asm-generic/errno-base.h:
++
++/usr/include/fuse/fuse.h:
++
++/usr/include/fuse/fuse_common.h:
++
++/usr/include/fuse/fuse_opt.h:
++
++/usr/include/x86_64-linux-gnu/sys/types.h:
++
++/usr/include/time.h:
++
++/usr/include/x86_64-linux-gnu/bits/pthreadtypes.h:
++
++/usr/include/fcntl.h:
++
++/usr/include/x86_64-linux-gnu/bits/fcntl.h:
++
++/usr/include/x86_64-linux-gnu/bits/fcntl-linux.h:
++
++/usr/include/x86_64-linux-gnu/bits/stat.h:
++
++/usr/include/x86_64-linux-gnu/bits/fcntl2.h:
++
++/usr/include/x86_64-linux-gnu/bits/time.h:
++
++/usr/include/utime.h:
++
++/usr/include/x86_64-linux-gnu/sys/stat.h:
++
++/usr/include/x86_64-linux-gnu/sys/statvfs.h:
++
++/usr/include/x86_64-linux-gnu/bits/statvfs.h:
++
++/usr/include/x86_64-linux-gnu/sys/uio.h:
++
++/usr/include/x86_64-linux-gnu/bits/uio.h:
++
++/usr/include/stdlib.h:
++
++/usr/include/x86_64-linux-gnu/bits/waitflags.h:
++
++/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdlib-float.h:
++
++/usr/include/x86_64-linux-gnu/bits/stdlib.h:
++
++/usr/include/string.h:
++
++/usr/include/x86_64-linux-gnu/bits/string.h:
++
++/usr/include/x86_64-linux-gnu/bits/string2.h:
++
++/usr/include/endian.h:
++
++/usr/include/x86_64-linux-gnu/bits/endian.h:
++
++/usr/include/x86_64-linux-gnu/bits/string3.h:
++
++/usr/include/unistd.h:
++
++/usr/include/x86_64-linux-gnu/bits/posix_opt.h:
++
++/usr/include/x86_64-linux-gnu/bits/environments.h:
++
++/usr/include/x86_64-linux-gnu/bits/confname.h:
++
++/usr/include/x86_64-linux-gnu/bits/unistd.h:
++
++log.h:
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/Makefile /home/rganvir/temp/fuse-tutorial-2016-03-25/src/Makefile
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/Makefile	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/Makefile	2016-10-24 05:04:33.235928697 +0530
+@@ -0,0 +1,588 @@
++# Makefile.in generated by automake 1.15 from Makefile.am.
++# src/Makefile.  Generated from Makefile.in by configure.
++
++# Copyright (C) 1994-2014 Free Software Foundation, Inc.
++
++# This Makefile.in is free software; the Free Software Foundation
++# gives unlimited permission to copy and/or distribute it,
++# with or without modifications, as long as this notice is preserved.
++
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY, to the extent permitted by law; without
++# even the implied warranty of MERCHANTABILITY or FITNESS FOR A
++# PARTICULAR PURPOSE.
++
++
++
++
++am__is_gnu_make = { \
++  if test -z '$(MAKELEVEL)'; then \
++    false; \
++  elif test -n '$(MAKE_HOST)'; then \
++    true; \
++  elif test -n '$(MAKE_VERSION)' && test -n '$(CURDIR)'; then \
++    true; \
++  else \
++    false; \
++  fi; \
++}
++am__make_running_with_option = \
++  case $${target_option-} in \
++      ?) ;; \
++      *) echo "am__make_running_with_option: internal error: invalid" \
++              "target option '$${target_option-}' specified" >&2; \
++         exit 1;; \
++  esac; \
++  has_opt=no; \
++  sane_makeflags=$$MAKEFLAGS; \
++  if $(am__is_gnu_make); then \
++    sane_makeflags=$$MFLAGS; \
++  else \
++    case $$MAKEFLAGS in \
++      *\\[\ \	]*) \
++        bs=\\; \
++        sane_makeflags=`printf '%s\n' "$$MAKEFLAGS" \
++          | sed "s/$$bs$$bs[$$bs $$bs	]*//g"`;; \
++    esac; \
++  fi; \
++  skip_next=no; \
++  strip_trailopt () \
++  { \
++    flg=`printf '%s\n' "$$flg" | sed "s/$$1.*$$//"`; \
++  }; \
++  for flg in $$sane_makeflags; do \
++    test $$skip_next = yes && { skip_next=no; continue; }; \
++    case $$flg in \
++      *=*|--*) continue;; \
++        -*I) strip_trailopt 'I'; skip_next=yes;; \
++      -*I?*) strip_trailopt 'I';; \
++        -*O) strip_trailopt 'O'; skip_next=yes;; \
++      -*O?*) strip_trailopt 'O';; \
++        -*l) strip_trailopt 'l'; skip_next=yes;; \
++      -*l?*) strip_trailopt 'l';; \
++      -[dEDm]) skip_next=yes;; \
++      -[JT]) skip_next=yes;; \
++    esac; \
++    case $$flg in \
++      *$$target_option*) has_opt=yes; break;; \
++    esac; \
++  done; \
++  test $$has_opt = yes
++am__make_dryrun = (target_option=n; $(am__make_running_with_option))
++am__make_keepgoing = (target_option=k; $(am__make_running_with_option))
++pkgdatadir = $(datadir)/fuse-tutorial
++pkgincludedir = $(includedir)/fuse-tutorial
++pkglibdir = $(libdir)/fuse-tutorial
++pkglibexecdir = $(libexecdir)/fuse-tutorial
++am__cd = CDPATH="$${ZSH_VERSION+.}$(PATH_SEPARATOR)" && cd
++install_sh_DATA = $(install_sh) -c -m 644
++install_sh_PROGRAM = $(install_sh) -c
++install_sh_SCRIPT = $(install_sh) -c
++INSTALL_HEADER = $(INSTALL_DATA)
++transform = $(program_transform_name)
++NORMAL_INSTALL = :
++PRE_INSTALL = :
++POST_INSTALL = :
++NORMAL_UNINSTALL = :
++PRE_UNINSTALL = :
++POST_UNINSTALL = :
++bin_PROGRAMS = bbfs$(EXEEXT)
++subdir = src
++ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
++am__aclocal_m4_deps = $(top_srcdir)/configure.ac
++am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
++	$(ACLOCAL_M4)
++DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
++mkinstalldirs = $(install_sh) -d
++CONFIG_HEADER = config.h
++CONFIG_CLEAN_FILES =
++CONFIG_CLEAN_VPATH_FILES =
++am__installdirs = "$(DESTDIR)$(bindir)"
++PROGRAMS = $(bin_PROGRAMS)
++am_bbfs_OBJECTS = bbfs.$(OBJEXT) log.$(OBJEXT)
++bbfs_OBJECTS = $(am_bbfs_OBJECTS)
++bbfs_LDADD = $(LDADD)
++bbfs_DEPENDENCIES =
++AM_V_P = $(am__v_P_$(V))
++am__v_P_ = $(am__v_P_$(AM_DEFAULT_VERBOSITY))
++am__v_P_0 = false
++am__v_P_1 = :
++AM_V_GEN = $(am__v_GEN_$(V))
++am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
++am__v_GEN_0 = @echo "  GEN     " $@;
++am__v_GEN_1 = 
++AM_V_at = $(am__v_at_$(V))
++am__v_at_ = $(am__v_at_$(AM_DEFAULT_VERBOSITY))
++am__v_at_0 = @
++am__v_at_1 = 
++DEFAULT_INCLUDES = -I.
++depcomp = $(SHELL) $(top_srcdir)/depcomp
++am__depfiles_maybe = depfiles
++am__mv = mv -f
++COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
++	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
++AM_V_CC = $(am__v_CC_$(V))
++am__v_CC_ = $(am__v_CC_$(AM_DEFAULT_VERBOSITY))
++am__v_CC_0 = @echo "  CC      " $@;
++am__v_CC_1 = 
++CCLD = $(CC)
++LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
++AM_V_CCLD = $(am__v_CCLD_$(V))
++am__v_CCLD_ = $(am__v_CCLD_$(AM_DEFAULT_VERBOSITY))
++am__v_CCLD_0 = @echo "  CCLD    " $@;
++am__v_CCLD_1 = 
++SOURCES = $(bbfs_SOURCES)
++DIST_SOURCES = $(bbfs_SOURCES)
++am__can_run_installinfo = \
++  case $$AM_UPDATE_INFO_DIR in \
++    n|no|NO) false;; \
++    *) (install-info --version) >/dev/null 2>&1;; \
++  esac
++am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) \
++	$(LISP)config.h.in
++# Read a list of newline-separated strings from the standard input,
++# and print each of them once, without duplicates.  Input order is
++# *not* preserved.
++am__uniquify_input = $(AWK) '\
++  BEGIN { nonempty = 0; } \
++  { items[$$0] = 1; nonempty = 1; } \
++  END { if (nonempty) { for (i in items) print i; }; } \
++'
++# Make sure the list of sources is unique.  This is necessary because,
++# e.g., the same source file might be shared among _SOURCES variables
++# for different programs/libraries.
++am__define_uniq_tagged_files = \
++  list='$(am__tagged_files)'; \
++  unique=`for i in $$list; do \
++    if test -f "$$i"; then echo $$i; else echo $(srcdir)/$$i; fi; \
++  done | $(am__uniquify_input)`
++ETAGS = etags
++CTAGS = ctags
++am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/config.h.in \
++	$(top_srcdir)/depcomp
++DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
++ACLOCAL = ${SHELL} /home/rganvir/temp/fuse-tutorial-2016-03-25/missing aclocal-1.15
++AMTAR = $${TAR-tar}
++AM_DEFAULT_VERBOSITY = 1
++AUTOCONF = ${SHELL} /home/rganvir/temp/fuse-tutorial-2016-03-25/missing autoconf
++AUTOHEADER = ${SHELL} /home/rganvir/temp/fuse-tutorial-2016-03-25/missing autoheader
++AUTOMAKE = ${SHELL} /home/rganvir/temp/fuse-tutorial-2016-03-25/missing automake-1.15
++AWK = gawk
++CC = gcc
++CCDEPMODE = depmode=gcc3
++CFLAGS = -g -O2
++CPP = gcc -E
++CPPFLAGS = 
++CYGPATH_W = echo
++DEFS = -DHAVE_CONFIG_H
++DEPDIR = .deps
++ECHO_C = 
++ECHO_N = -n
++ECHO_T = 
++EGREP = /bin/grep -E
++EXEEXT = 
++FUSE_CFLAGS = -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse
++FUSE_LIBS = -lfuse -pthread
++GREP = /bin/grep
++INSTALL = /usr/bin/install -c
++INSTALL_DATA = ${INSTALL} -m 644
++INSTALL_PROGRAM = ${INSTALL}
++INSTALL_SCRIPT = ${INSTALL}
++INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
++LDFLAGS = 
++LIBOBJS = 
++LIBS = 
++LTLIBOBJS = 
++MAKEINFO = ${SHELL} /home/rganvir/temp/fuse-tutorial-2016-03-25/missing makeinfo
++MKDIR_P = /bin/mkdir -p
++OBJEXT = o
++PACKAGE = fuse-tutorial
++PACKAGE_BUGREPORT = joseph@pfeifferfamily.net
++PACKAGE_NAME = fuse-tutorial
++PACKAGE_STRING = fuse-tutorial 2016-03-25
++PACKAGE_TARNAME = fuse-tutorial
++PACKAGE_URL = 
++PACKAGE_VERSION = 2016-03-25
++PATH_SEPARATOR = :
++PKG_CONFIG = /usr/bin/pkg-config
++PKG_CONFIG_LIBDIR = 
++PKG_CONFIG_PATH = 
++SET_MAKE = 
++SHELL = /bin/bash
++STRIP = 
++VERSION = 2016-03-25
++abs_builddir = /home/rganvir/temp/fuse-tutorial-2016-03-25/src
++abs_srcdir = /home/rganvir/temp/fuse-tutorial-2016-03-25/src
++abs_top_builddir = /home/rganvir/temp/fuse-tutorial-2016-03-25
++abs_top_srcdir = /home/rganvir/temp/fuse-tutorial-2016-03-25
++ac_ct_CC = gcc
++am__include = include
++am__leading_dot = .
++am__quote = 
++am__tar = $${TAR-tar} chof - "$$tardir"
++am__untar = $${TAR-tar} xf -
++bindir = ${exec_prefix}/bin
++build_alias = 
++builddir = .
++datadir = ${datarootdir}
++datarootdir = ${prefix}/share
++docdir = ${datarootdir}/doc/${PACKAGE_TARNAME}
++dvidir = ${docdir}
++exec_prefix = ${prefix}
++host_alias = 
++htmldir = ${docdir}
++includedir = ${prefix}/include
++infodir = ${datarootdir}/info
++install_sh = ${SHELL} /home/rganvir/temp/fuse-tutorial-2016-03-25/install-sh
++libdir = ${exec_prefix}/lib
++libexecdir = ${exec_prefix}/libexec
++localedir = ${datarootdir}/locale
++localstatedir = ${prefix}/var
++mandir = ${datarootdir}/man
++mkdir_p = $(MKDIR_P)
++oldincludedir = /usr/include
++pdfdir = ${docdir}
++prefix = /usr/local
++program_transform_name = s,x,x,
++psdir = ${docdir}
++runstatedir = ${localstatedir}/run
++sbindir = ${exec_prefix}/sbin
++sharedstatedir = ${prefix}/com
++srcdir = .
++sysconfdir = ${prefix}/etc
++target_alias = 
++top_build_prefix = ../
++top_builddir = ..
++top_srcdir = ..
++bbfs_SOURCES = bbfs.c log.c log.h  params.h
++AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse
++LDADD = -lfuse -pthread
++all: config.h
++	$(MAKE) $(AM_MAKEFLAGS) all-am
++
++.SUFFIXES:
++.SUFFIXES: .c .o .obj
++$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
++	@for dep in $?; do \
++	  case '$(am__configure_deps)' in \
++	    *$$dep*) \
++	      ( cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh ) \
++	        && { if test -f $@; then exit 0; else break; fi; }; \
++	      exit 1;; \
++	  esac; \
++	done; \
++	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu src/Makefile'; \
++	$(am__cd) $(top_srcdir) && \
++	  $(AUTOMAKE) --gnu src/Makefile
++Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
++	@case '$?' in \
++	  *config.status*) \
++	    cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh;; \
++	  *) \
++	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)'; \
++	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe);; \
++	esac;
++
++$(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
++	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
++
++$(top_srcdir)/configure:  $(am__configure_deps)
++	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
++$(ACLOCAL_M4):  $(am__aclocal_m4_deps)
++	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
++$(am__aclocal_m4_deps):
++
++config.h: stamp-h1
++	@test -f $@ || rm -f stamp-h1
++	@test -f $@ || $(MAKE) $(AM_MAKEFLAGS) stamp-h1
++
++stamp-h1: $(srcdir)/config.h.in $(top_builddir)/config.status
++	@rm -f stamp-h1
++	cd $(top_builddir) && $(SHELL) ./config.status src/config.h
++$(srcdir)/config.h.in:  $(am__configure_deps) 
++	($(am__cd) $(top_srcdir) && $(AUTOHEADER))
++	rm -f stamp-h1
++	touch $@
++
++distclean-hdr:
++	-rm -f config.h stamp-h1
++install-binPROGRAMS: $(bin_PROGRAMS)
++	@$(NORMAL_INSTALL)
++	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
++	if test -n "$$list"; then \
++	  echo " $(MKDIR_P) '$(DESTDIR)$(bindir)'"; \
++	  $(MKDIR_P) "$(DESTDIR)$(bindir)" || exit 1; \
++	fi; \
++	for p in $$list; do echo "$$p $$p"; done | \
++	sed 's/$(EXEEXT)$$//' | \
++	while read p p1; do if test -f $$p \
++	  ; then echo "$$p"; echo "$$p"; else :; fi; \
++	done | \
++	sed -e 'p;s,.*/,,;n;h' \
++	    -e 's|.*|.|' \
++	    -e 'p;x;s,.*/,,;s/$(EXEEXT)$$//;$(transform);s/$$/$(EXEEXT)/' | \
++	sed 'N;N;N;s,\n, ,g' | \
++	$(AWK) 'BEGIN { files["."] = ""; dirs["."] = 1 } \
++	  { d=$$3; if (dirs[d] != 1) { print "d", d; dirs[d] = 1 } \
++	    if ($$2 == $$4) files[d] = files[d] " " $$1; \
++	    else { print "f", $$3 "/" $$4, $$1; } } \
++	  END { for (d in files) print "f", d, files[d] }' | \
++	while read type dir files; do \
++	    if test "$$dir" = .; then dir=; else dir=/$$dir; fi; \
++	    test -z "$$files" || { \
++	      echo " $(INSTALL_PROGRAM_ENV) $(INSTALL_PROGRAM) $$files '$(DESTDIR)$(bindir)$$dir'"; \
++	      $(INSTALL_PROGRAM_ENV) $(INSTALL_PROGRAM) $$files "$(DESTDIR)$(bindir)$$dir" || exit $$?; \
++	    } \
++	; done
++
++uninstall-binPROGRAMS:
++	@$(NORMAL_UNINSTALL)
++	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
++	files=`for p in $$list; do echo "$$p"; done | \
++	  sed -e 'h;s,^.*/,,;s/$(EXEEXT)$$//;$(transform)' \
++	      -e 's/$$/$(EXEEXT)/' \
++	`; \
++	test -n "$$list" || exit 0; \
++	echo " ( cd '$(DESTDIR)$(bindir)' && rm -f" $$files ")"; \
++	cd "$(DESTDIR)$(bindir)" && rm -f $$files
++
++clean-binPROGRAMS:
++	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
++
++bbfs$(EXEEXT): $(bbfs_OBJECTS) $(bbfs_DEPENDENCIES) $(EXTRA_bbfs_DEPENDENCIES) 
++	@rm -f bbfs$(EXEEXT)
++	$(AM_V_CCLD)$(LINK) $(bbfs_OBJECTS) $(bbfs_LDADD) $(LIBS)
++
++mostlyclean-compile:
++	-rm -f *.$(OBJEXT)
++
++distclean-compile:
++	-rm -f *.tab.c
++
++include ./$(DEPDIR)/bbfs.Po
++include ./$(DEPDIR)/log.Po
++
++.c.o:
++	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
++	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
++#	$(AM_V_CC)source='$<' object='$@' libtool=no \
++#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
++#	$(AM_V_CC_no)$(COMPILE) -c -o $@ $<
++
++.c.obj:
++	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
++	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
++#	$(AM_V_CC)source='$<' object='$@' libtool=no \
++#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
++#	$(AM_V_CC_no)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
++
++ID: $(am__tagged_files)
++	$(am__define_uniq_tagged_files); mkid -fID $$unique
++tags: tags-am
++TAGS: tags
++
++tags-am: $(TAGS_DEPENDENCIES) $(am__tagged_files)
++	set x; \
++	here=`pwd`; \
++	$(am__define_uniq_tagged_files); \
++	shift; \
++	if test -z "$(ETAGS_ARGS)$$*$$unique"; then :; else \
++	  test -n "$$unique" || unique=$$empty_fix; \
++	  if test $$# -gt 0; then \
++	    $(ETAGS) $(ETAGSFLAGS) $(AM_ETAGSFLAGS) $(ETAGS_ARGS) \
++	      "$$@" $$unique; \
++	  else \
++	    $(ETAGS) $(ETAGSFLAGS) $(AM_ETAGSFLAGS) $(ETAGS_ARGS) \
++	      $$unique; \
++	  fi; \
++	fi
++ctags: ctags-am
++
++CTAGS: ctags
++ctags-am: $(TAGS_DEPENDENCIES) $(am__tagged_files)
++	$(am__define_uniq_tagged_files); \
++	test -z "$(CTAGS_ARGS)$$unique" \
++	  || $(CTAGS) $(CTAGSFLAGS) $(AM_CTAGSFLAGS) $(CTAGS_ARGS) \
++	     $$unique
++
++GTAGS:
++	here=`$(am__cd) $(top_builddir) && pwd` \
++	  && $(am__cd) $(top_srcdir) \
++	  && gtags -i $(GTAGS_ARGS) "$$here"
++cscopelist: cscopelist-am
++
++cscopelist-am: $(am__tagged_files)
++	list='$(am__tagged_files)'; \
++	case "$(srcdir)" in \
++	  [\\/]* | ?:[\\/]*) sdir="$(srcdir)" ;; \
++	  *) sdir=$(subdir)/$(srcdir) ;; \
++	esac; \
++	for i in $$list; do \
++	  if test -f "$$i"; then \
++	    echo "$(subdir)/$$i"; \
++	  else \
++	    echo "$$sdir/$$i"; \
++	  fi; \
++	done >> $(top_builddir)/cscope.files
++
++distclean-tags:
++	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
++
++distdir: $(DISTFILES)
++	@srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
++	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
++	list='$(DISTFILES)'; \
++	  dist_files=`for file in $$list; do echo $$file; done | \
++	  sed -e "s|^$$srcdirstrip/||;t" \
++	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t"`; \
++	case $$dist_files in \
++	  */*) $(MKDIR_P) `echo "$$dist_files" | \
++			   sed '/\//!d;s|^|$(distdir)/|;s,/[^/]*$$,,' | \
++			   sort -u` ;; \
++	esac; \
++	for file in $$dist_files; do \
++	  if test -f $$file || test -d $$file; then d=.; else d=$(srcdir); fi; \
++	  if test -d $$d/$$file; then \
++	    dir=`echo "/$$file" | sed -e 's,/[^/]*$$,,'`; \
++	    if test -d "$(distdir)/$$file"; then \
++	      find "$(distdir)/$$file" -type d ! -perm -700 -exec chmod u+rwx {} \;; \
++	    fi; \
++	    if test -d $(srcdir)/$$file && test $$d != $(srcdir); then \
++	      cp -fpR $(srcdir)/$$file "$(distdir)$$dir" || exit 1; \
++	      find "$(distdir)/$$file" -type d ! -perm -700 -exec chmod u+rwx {} \;; \
++	    fi; \
++	    cp -fpR $$d/$$file "$(distdir)$$dir" || exit 1; \
++	  else \
++	    test -f "$(distdir)/$$file" \
++	    || cp -p $$d/$$file "$(distdir)/$$file" \
++	    || exit 1; \
++	  fi; \
++	done
++check-am: all-am
++check: check-am
++all-am: Makefile $(PROGRAMS) config.h
++installdirs:
++	for dir in "$(DESTDIR)$(bindir)"; do \
++	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
++	done
++install: install-am
++install-exec: install-exec-am
++install-data: install-data-am
++uninstall: uninstall-am
++
++install-am: all-am
++	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
++
++installcheck: installcheck-am
++install-strip:
++	if test -z '$(STRIP)'; then \
++	  $(MAKE) $(AM_MAKEFLAGS) INSTALL_PROGRAM="$(INSTALL_STRIP_PROGRAM)" \
++	    install_sh_PROGRAM="$(INSTALL_STRIP_PROGRAM)" INSTALL_STRIP_FLAG=-s \
++	      install; \
++	else \
++	  $(MAKE) $(AM_MAKEFLAGS) INSTALL_PROGRAM="$(INSTALL_STRIP_PROGRAM)" \
++	    install_sh_PROGRAM="$(INSTALL_STRIP_PROGRAM)" INSTALL_STRIP_FLAG=-s \
++	    "INSTALL_PROGRAM_ENV=STRIPPROG='$(STRIP)'" install; \
++	fi
++mostlyclean-generic:
++
++clean-generic:
++
++distclean-generic:
++	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
++	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
++
++maintainer-clean-generic:
++	@echo "This command is intended for maintainers to use"
++	@echo "it deletes files that may require special tools to rebuild."
++clean: clean-am
++
++clean-am: clean-binPROGRAMS clean-generic mostlyclean-am
++
++distclean: distclean-am
++	-rm -rf ./$(DEPDIR)
++	-rm -f Makefile
++distclean-am: clean-am distclean-compile distclean-generic \
++	distclean-hdr distclean-tags
++
++dvi: dvi-am
++
++dvi-am:
++
++html: html-am
++
++html-am:
++
++info: info-am
++
++info-am:
++
++install-data-am:
++
++install-dvi: install-dvi-am
++
++install-dvi-am:
++
++install-exec-am: install-binPROGRAMS
++
++install-html: install-html-am
++
++install-html-am:
++
++install-info: install-info-am
++
++install-info-am:
++
++install-man:
++
++install-pdf: install-pdf-am
++
++install-pdf-am:
++
++install-ps: install-ps-am
++
++install-ps-am:
++
++installcheck-am:
++
++maintainer-clean: maintainer-clean-am
++	-rm -rf ./$(DEPDIR)
++	-rm -f Makefile
++maintainer-clean-am: distclean-am maintainer-clean-generic
++
++mostlyclean: mostlyclean-am
++
++mostlyclean-am: mostlyclean-compile mostlyclean-generic
++
++pdf: pdf-am
++
++pdf-am:
++
++ps: ps-am
++
++ps-am:
++
++uninstall-am: uninstall-binPROGRAMS
++
++.MAKE: all install-am install-strip
++
++.PHONY: CTAGS GTAGS TAGS all all-am check check-am clean \
++	clean-binPROGRAMS clean-generic cscopelist-am ctags ctags-am \
++	distclean distclean-compile distclean-generic distclean-hdr \
++	distclean-tags distdir dvi dvi-am html html-am info info-am \
++	install install-am install-binPROGRAMS install-data \
++	install-data-am install-dvi install-dvi-am install-exec \
++	install-exec-am install-html install-html-am install-info \
++	install-info-am install-man install-pdf install-pdf-am \
++	install-ps install-ps-am install-strip installcheck \
++	installcheck-am installdirs maintainer-clean \
++	maintainer-clean-generic mostlyclean mostlyclean-compile \
++	mostlyclean-generic pdf pdf-am ps ps-am tags tags-am uninstall \
++	uninstall-am uninstall-binPROGRAMS
++
++.PRECIOUS: Makefile
++
++
++# Tell versions [3.59,3.63) of GNU make to not export all variables.
++# Otherwise a system limit (for SysV at least) may be exceeded.
++.NOEXPORT:
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/params.h /home/rganvir/temp/fuse-tutorial-2016-03-25/src/params.h
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/params.h	2012-11-15 22:37:08.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/params.h	2016-10-24 05:04:33.235928697 +0530
+@@ -23,10 +23,26 @@
+ // maintain bbfs state in here
+ #include <limits.h>
+ #include <stdio.h>
++#include <stdint.h>
+ struct bb_state {
+     FILE *logfile;
+     char *rootdir;
+ };
++
++struct file_cnt{
++	int n_blocks;
++	int size;
++};
++
++struct file_node{
++	int n_blocks;
++	int size;
++	char **block; //array of hashes each of length 40
++};
++
+ #define BB_DATA ((struct bb_state *) fuse_get_context()->private_data)
+ 
++// takes fi, allocates and construct file_node from fi and returns the struct
++
+ #endif
++
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/README_FIRST /home/rganvir/temp/fuse-tutorial-2016-03-25/src/README_FIRST
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/README_FIRST	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/README_FIRST	2016-10-24 05:04:33.235928697 +0530
+@@ -0,0 +1,29 @@
++File System Plan:
++=================
++
++The rootdir contains a directory ".META". Say file system currenltly stores
++n distinct blocks. Consider a single block with SHA1 hash `h`. Corresponding
++to this block one has two files in ".META":
++
++	`h.data` is a file spanning a block and stores the actual block data
++	`h.meta` is a file storing auxillary data like number of references to this block
++
++Say we have a file in filesystem named `myfile.txt`
++Actual contents of `myfile.txt` on disk will be:
++	N_BLOCKS
++	SIZE
++	BLOCK1 (each of these values is nothing but hash value)
++	BLOCK2
++	.
++	.
++	.
++	.
++This structure of file will be read up by our filesystem and handled appropriately.
++Directories are stored in usual way
++
++
++* We clean the rootdir upon initialization. to make stuff easier.
++
++* Lets try and use the following code for SHA1 - https://github.com/clibs/sha1
++  Its well documented and will simpplify our work to a great deal.
++
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/readme.txt /home/rganvir/temp/fuse-tutorial-2016-03-25/src/readme.txt
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/readme.txt	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/readme.txt	2016-10-24 13:20:53.443812003 +0530
+@@ -0,0 +1,31 @@
++File System Plan:
++=================
++
++The rootdir contains a directory ".META". Say file system currenltly stores
++n distinct blocks. Consider a single block with SHA1 hash `h`. Corresponding
++to this block one has two files in ".META":
++
++	`h.data` is a file spanning a block and stores the actual block data
++	`h.meta` is a file storing auxillary data like number of references to this block
++
++Say we have a file in filesystem named `myfile.txt`
++Actual contents of `myfile.txt` on disk will be:
++	N_BLOCKS
++	SIZE
++	BLOCK1 (each of these values is nothing but hash value)
++	BLOCK2
++	.
++	.
++	.
++	.
++This structure of file will be read up by our filesystem and handled appropriately.
++Directories are stored in usual way
++
++* We clean the rootdir upon initialization. to make stuff easier.
++
++TESTING:
++========
++
++We create a random file of size 10 M `head -c 10M </dev/urandom >file`
++Then make 100 copies of the file in the mounted directory(takes some time).
++In our case a `du -sh` of the root dir shows that only 6.6MB was used up.
+diff -Naur /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/stamp-h1 /home/rganvir/temp/fuse-tutorial-2016-03-25/src/stamp-h1
+--- /home/rganvir/temp/q/fuse-tutorial-2016-03-25/src/stamp-h1	1970-01-01 05:30:00.000000000 +0530
++++ /home/rganvir/temp/fuse-tutorial-2016-03-25/src/stamp-h1	2016-10-24 05:04:33.235928697 +0530
+@@ -0,0 +1 @@
++timestamp for src/config.h
