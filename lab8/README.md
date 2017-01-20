@@ -1,3 +1,9 @@
+Deduplication supporting filesystem
+===================================
+
+Built on top of [BBFS](https://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/).
+
+
 File System Plan:
 =================
 
